@@ -57,8 +57,9 @@ const DEFAULT_FOCUS = [
 
 // ── STORAGE ───────────────────────────────────────────────────────────────
 const db = {
-  get: async (k) => { try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; } catch { return null; } },
-  set: async (k, v) => { try { await window.storage.set(k, JSON.stringify(v)); } catch {} },
+  get: async (k) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch { return null; } },
+  set: async (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  delete: async (k) => { try { localStorage.removeItem(k); } catch {} },
 };
 
 // ── SHARED STYLE ATOMS ────────────────────────────────────────────────────
