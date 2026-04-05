@@ -1,6 +1,11 @@
 {
   "name": "project",
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
     "vite": "latest",
     "vite-plugin-pwa": "^1.2.0"
   },

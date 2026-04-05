@@ -1,108 +1,21 @@
-* {
-    box-sizing: border-box;
-}    
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
 
 body {
-    margin: 0;
-    background: no-repeat center center fixed; 
-    -webkit-background-size: cover;
-    -moz-background-size: cover;
-    -o-background-size: cover;
-    background-size: cover;
-    color: white;
-    font-family: Arial, Helvetica, sans-serif;
-    text-shadow: 0px 0px 20px #242424;
+  margin: 0;
 }
 
-main {
-    padding: 15px;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+button,
+input,
+textarea {
+  font: inherit;
 }
-
-div.top,
-div.bottom{
-    display: flex;
-    justify-content: space-between;
-}
-
-h1.time {
-    text-align: center;
-    font-size: 5rem;
-}
-
-div#crypto {
-    font-size: 1rem;
-}
-
-div#crypto > p {
-    margin: 1px;
-}
-
-div#crypto-top {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
-}
-
-div#crypto-top > img {
-    width: 40px;
-}
-
-div#crypto-top > span {
-    margin-left: 10px;
-    font-size: 1.25rem;
-}
-
-div#weather {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-self: flex-start;
-    margin-top: -20px;
-}
-
-div#weather > img {
-    width: 70px;
-}
-
-p.weather-city {
-    width: 100%;
-    text-align: right;
-    margin: 0;
-    margin-top: -10px;
-    font-size: 2rem;
-}
-
-p.weather-temp {
-    margin: 0;
-    font-size: 1.7rem;
-    margin-left: -10px;
-}
-
-p#author {
-    font-size: 1rem;
-    align-self:flex-end;
-}
-
-
-p#quote{
-display: flex;
-font-size: 1.10rem;
-padding: none;
-flex-direction: column;
-margin: 0;
-max-width: 50%;
-margin-block-end: 0;
-}
-
-p.quote-author {
-align-self: flex-end;
-margin-top: auto;
-font-size: 1rem;
-
-}
-
