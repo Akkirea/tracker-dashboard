@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
+const API = 'https://your-day.up.railway.app';
+
 // ── PALETTE ───────────────────────────────────────────────────────────────
 const C = {
   bg:"#0D0A06", surface:"#141009", card:"#1B1510",
@@ -57,8 +59,49 @@ const DEFAULT_FOCUS = [
 
 // ── STORAGE ───────────────────────────────────────────────────────────────
 const db = {
-  get: async (k) => { try { const val = localStorage.getItem(k); return val ? JSON.parse(val) : null; } catch { return null; } },
-  set: async (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  get: async (k) => {
+    try {
+      const val = localStorage.getItem(k);
+      return val ? JSON.parse(val) : null;
+    } catch { return null; }
+  },
+  set: async (k, v) => {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {}
+  },
+};
+
+const api = {
+  signup: async (email, password) => {
+    const r = await fetch(`${API}/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    return r.json();
+  },
+  login: async (email, password) => {
+    const r = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    return r.json();
+  },
+  load: async (token) => {
+    const r = await fetch(`${API}/data`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return r.json();
+  },
+  save: async (token, data) => {
+    await fetch(`${API}/data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 // ── SHARED STYLE ATOMS ────────────────────────────────────────────────────
@@ -700,7 +743,54 @@ const TABS = [
   {id:"cycle",   icon:"◑", label:"cycle"   },
 ];
 
+function LoginScreen({ onAuth }) {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!email || !password) return setError('enter email and password');
+    setLoading(true); setError('');
+    const res = mode === 'login' ? await api.login(email, password) : await api.signup(email, password);
+    setLoading(false);
+    if (res.error) return setError(res.error);
+    localStorage.setItem('token', res.token);
+    localStorage.setItem('email', res.email);
+    onAuth(res.token, res.email);
+  };
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#0D0A06', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ width:'100%', maxWidth:360 }}>
+        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:'#EDE6D0', textAlign:'center', marginBottom:8 }}>your day</div>
+        <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:'#5A5040', textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>your data, everywhere you are</div>
+        <div style={{ display:'flex', gap:8, marginBottom:24 }}>
+          {['login','signup'].map(m => (
+            <button key={m} onClick={() => setMode(m)} style={{ flex:1, padding:'10px', borderRadius:10, border:`1px solid ${mode===m ? '#C4694A' : '#342C1E'}`, background:'none', color: mode===m ? '#C4694A' : '#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:13, cursor:'pointer' }}>{m}</button>
+          ))}
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email" type="email"
+            style={{ width:'100%', background:'#1B1510', border:'1px solid #342C1E', borderRadius:10, padding:'12px 14px', color:'#EDE6D0', fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
+          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="password" type="password"
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            style={{ width:'100%', background:'#1B1510', border:'1px solid #342C1E', borderRadius:10, padding:'12px 14px', color:'#EDE6D0', fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
+          {error && <p style={{ color:'#C47A8A', fontFamily:"'Outfit',sans-serif", fontSize:12, margin:0 }}>{error}</p>}
+          <button onClick={submit} disabled={loading}
+            style={{ background:'#C4694A', border:'none', borderRadius:10, padding:'13px', color:'#fff', fontFamily:"'Outfit',sans-serif", fontSize:14, fontWeight:500, cursor:'pointer', marginTop:4 }}>
+            {loading ? '...' : mode === 'login' ? 'log in' : 'create account'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [userEmail, setUserEmail] = useState(() => localStorage.getItem('email'));
   const [tab,setTab]               = useState("today");
   const [anchors,setAnchors]       = useState(DEFAULT_ANCHORS);
   const [anchorDone,setAnchorDone] = useState([]);
@@ -713,6 +803,10 @@ export default function App() {
   const [cycleData,setCycleData]   = useState({lastPeriod:"",cycleLength:28,periodLength:5});
   const [loaded,setLoaded]         = useState(false);
   const tk = todayKey();
+  const saveToServer = async (data) => {
+  if (!token) return;
+  await api.save(token, data);
+};
 
   useEffect(()=>{
     const l=document.createElement("link");
@@ -723,33 +817,35 @@ export default function App() {
     document.body.style.background=C.bg;
   },[]);
 
-  useEffect(()=>{
-    (async()=>{
-      const a =await db.get("anchors");      if(a)  setAnchors(a);
-      const ad=await db.get(`adone-${tk}`);  if(ad) setAnchorDone(ad);
-      const ft=await db.get("focusTasks");   if(ft) setFocusTasks(ft);
-      const fd=await db.get(`fdone-${tk}`);  if(fd) setFocusDone(fd);
-      const gr=await db.get("grocery");      if(gr) setGrocery(gr);
-      const rc=await db.get("recipes");      if(rc) setRecipes(rc);
-      const jo=await db.get("journal");      if(jo) setJournal(jo);
-      const go=await db.get("goals");        if(go) setGoals(go);
-      const cy=await db.get("cycle");        if(cy) setCycleData(cy);
-      setLoaded(true);
-    })();
-  },[]);
+  useEffect(() => {
+  if (!token) return;
+  (async () => {
+    const remote = await api.load(token);
+    if (remote.error) { localStorage.removeItem('token'); setToken(null); return; }
+    const tk = todayKey();
+    if (remote.anchors) setAnchors(remote.anchors);
+    if (remote[`adone-${tk}`]) setAnchorDone(remote[`adone-${tk}`]);
+    if (remote.focusTasks) setFocusTasks(remote.focusTasks);
+    if (remote[`fdone-${tk}`]) setFocusDone(remote[`fdone-${tk}`]);
+    if (remote.grocery) setGrocery(remote.grocery);
+    if (remote.recipes) setRecipes(remote.recipes);
+    if (remote.journal) setJournal(remote.journal);
+    if (remote.goals) setGoals(remote.goals);
+    if (remote.cycle) setCycleData(remote.cycle);
+    setLoaded(true);
+  })();
+}, [token]);
 
-  useEffect(()=>{if(loaded)db.set("anchors",anchors);},[anchors,loaded]);
-  useEffect(()=>{if(loaded)db.set(`adone-${tk}`,anchorDone);},[anchorDone,loaded]);
-  useEffect(()=>{if(loaded)db.set("focusTasks",focusTasks);},[focusTasks,loaded]);
-  useEffect(()=>{if(loaded)db.set(`fdone-${tk}`,focusDone);},[focusDone,loaded]);
-  useEffect(()=>{if(loaded)db.set("grocery",grocery);},[grocery,loaded]);
-  useEffect(()=>{if(loaded)db.set("recipes",recipes);},[recipes,loaded]);
-  useEffect(()=>{if(loaded)db.set("journal",journal);},[journal,loaded]);
-  useEffect(()=>{if(loaded)db.set("goals",goals);},[goals,loaded]);
-  useEffect(()=>{if(loaded)db.set("cycle",cycleData);},[cycleData,loaded]);
+  useEffect(() => {
+  if (!loaded || !token) return;
+  const tk = todayKey();
+  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, recipes, journal, goals, cycle: cycleData };
+  api.save(token, data);
+}, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, goals, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
 
+  if (!token) return <LoginScreen onAuth={(t, e) => { setToken(t); setUserEmail(e); }} />;
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",justifyContent:"center",fontFamily:"'Outfit',sans-serif"}}>
       <div style={{width:"100%",maxWidth:480,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
@@ -792,7 +888,10 @@ export default function App() {
         </div>
 
         <div style={{padding:"10px 20px 16px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
-          <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:11,color:C.textDim,textAlign:"center",margin:0,letterSpacing:"0.06em"}}>built for you · your data stays here</p>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+  <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:11, color:'#5A5040', margin:0 }}>{userEmail}</p>
+  <button onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('email'); setToken(null); }} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer' }}>log out</button>
+</div>
         </div>
       </div>
     </div>
