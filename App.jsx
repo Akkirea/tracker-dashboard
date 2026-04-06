@@ -570,7 +570,7 @@ function RecipesTab({recipes,setRecipes}) {
   const add=()=>{if(!form.name.trim())return;setRecipes(p=>[...p,{id:`r${Date.now()}`,...form,name:form.name.trim()}]);setForm({name:"",notes:"",emoji:"🥗"});setShowAdd(false);};
   return (
     <div>
-      <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,marginBottom:22}}>your vegan recipes</p>
+      <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,marginBottom:22}}>your recipes</p>
       {recipes.map(r=>(
         <div key={r.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
           <div onClick={()=>setExpanded(e=>e===r.id?null:r.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",cursor:"pointer"}}>
@@ -604,7 +604,7 @@ function RecipesTab({recipes,setRecipes}) {
       ):(
         <button onClick={()=>setShowAdd(true)} style={dash}>+ add recipe</button>
       )}
-      {recipes.length===0&&!showAdd&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:16}}>save your go-to vegan recipes here</p>}
+      {recipes.length===0&&!showAdd&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:16}}>save your go-to recipes here</p>}
     </div>
   );
 }
@@ -632,7 +632,7 @@ function JournalTab({entries,setEntries}) {
   return (
     <div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 18px 14px",marginBottom:22}}>
-        <span style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,display:"block",marginBottom:10}}>what are you grateful for?</span>
+        <span style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,display:"block",marginBottom:10}}>3 things you feel grateful for today</span>
         <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="write it here..." rows={4}
           style={{width:"100%",background:"none",border:"none",borderBottom:`1px solid ${C.borderMid}`,padding:"8px 0",color:C.text,fontSize:16,fontFamily:"'Cormorant Garamond',serif",outline:"none",boxSizing:"border-box",caretColor:C.accent,resize:"none",lineHeight:1.75}}/>
         <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
@@ -733,12 +733,12 @@ function CycleTab({cycleData,setCycleData,info}) {
 
 // ── ROOT ──────────────────────────────────────────────────────────────────
 const TABS = [
-  {id:"today",   icon:"◎", label:"today"   },
   {id:"breathe", icon:"❄", label:"breathe" },
+  {id:"today",   icon:"◎", label:"today"   },
   {id:"focus",   icon:"⊙", label:"focus"   },
+  {id:"journal", icon:"✦", label:"gratitude" },
   {id:"grocery", icon:"◻", label:"grocery" },
   {id:"recipes", icon:"✿", label:"recipes" },
-  {id:"journal", icon:"✦", label:"journal" },
   {id:"goals",   icon:"△", label:"dreams"  },
   {id:"cycle",   icon:"◑", label:"cycle"   },
 ];
