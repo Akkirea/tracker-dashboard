@@ -1195,8 +1195,8 @@ function LoginScreen({ onAuth }) {
   return (
     <div style={{ minHeight:'100vh', background:'#0D0A06', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
       <div style={{ width:'100%', maxWidth:430, background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, padding:'32px 28px', boxShadow:'0 28px 80px rgba(0,0,0,0.32)' }}>
-        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:'#EDE6D0', textAlign:'center', marginBottom:8 }}>your day</div>
-        <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:'#5A5040', textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>your data, everywhere you are</div>
+        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:'#EDE6D0', textAlign:'center', marginBottom:8 }}>Held</div>
+        <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:'#5A5040', textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>daily anchor app</div>
         <div style={{ display:'flex', gap:8, marginBottom:24 }}>
           {['login','signup'].map(m => (
             <button key={m} onClick={() => setMode(m)} style={{ flex:1, padding:'10px', borderRadius:10, border:`1px solid ${mode===m ? '#C4694A' : '#342C1E'}`, background:'none', color: mode===m ? '#C4694A' : '#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:13, cursor:'pointer' }}>{m}</button>
@@ -1289,7 +1289,7 @@ export default function App() {
         <aside style={{background:C.surface,border:isDesktop ? `1px solid ${C.border}` : "none",borderRadius:isDesktop ? 28 : 0,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:isDesktop ? "calc(100vh - 48px)" : "auto",position:isDesktop ? "sticky" : "relative",top:isDesktop ? 24 : 0,alignSelf:isDesktop ? "start" : "stretch"}}>
           <div style={{padding:isDesktop ? "30px 24px 22px" : "28px 24px 16px",borderBottom:`1px solid ${C.border}`}}>
             <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>{fmtFull()}</div>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:isDesktop ? 36 : 30,fontWeight:300,color:C.text,lineHeight:1.1}}>your day</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:isDesktop ? 36 : 30,fontWeight:300,color:C.text,lineHeight:1.1}}>Held</div>
             <p style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,lineHeight:1.6,margin:"10px 0 0"}}>
               A single place for anchors, work, reflection, and long-range planning.
             </p>

@@ -8,8 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
-        name: "Your Day",
-        short_name: "Your Day",
+        name: "Held",
+        short_name: "Held",
+        description: "daily anchor app",
         theme_color: "#0D0A06",
         background_color: "#0D0A06",
         display: "standalone",
