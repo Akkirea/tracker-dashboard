@@ -615,7 +615,7 @@ function JournalCard({entry,onDelete}) {
   return (
     <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",marginBottom:10,position:"relative"}}>
-      <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.75,margin:"0 0 6px"}}>{entry.text}</p>
+      <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.75,margin:"0 0 6px",whiteSpace:"pre-wrap"}}>{entry.text}</p>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>{fmtShort(entry.date)}</span>
       {hov&&<button onClick={onDelete} style={{position:"absolute",top:10,right:10,background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12}}>✕</button>}
     </div>
