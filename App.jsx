@@ -731,14 +731,35 @@ function RecipesTab({recipes,setRecipes}) {
 }
 
 // ── JOURNAL ───────────────────────────────────────────────────────────────
-function JournalCard({entry,onDelete}) {
-  const [hov,setHov]=useState(false);
+function GratitudeDateCard({ dateKey, entries, onDelete }) {
   return (
-    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",marginBottom:10,position:"relative"}}>
-      <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.75,margin:"0 0 6px",whiteSpace:"pre-wrap"}}>{entry.text}</p>
-      <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>{fmtShort(entry.date)}</span>
-      {hov&&<button onClick={onDelete} style={{position:"absolute",top:10,right:10,background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12}}>✕</button>}
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 16px 14px",marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:12}}>
+        <div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:C.text,lineHeight:1}}>
+            {fmtWeekday(dateKey)}
+          </div>
+          <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,marginTop:4}}>
+            {fmtShort(dateKey)}
+          </div>
+        </div>
+        <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
+          {entries.length} saved
+        </div>
+      </div>
+      <div style={{display:"grid",gap:10}}>
+        {entries.map((entry, index) => (
+          <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start",paddingTop:index === 0 ? 0 : 10,borderTop:index === 0 ? "none" : `1px solid ${C.border}`}}>
+            <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.accent}}>{index + 1}</span>
+            </div>
+            <div style={{flex:1}}>
+              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
+            </div>
+            <button onClick={() => onDelete(entry.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -746,8 +767,15 @@ function JournalCard({entry,onDelete}) {
 function JournalTab({entries,setEntries}) {
   const [text,setText]=useState("");
   const tk=todayKey();
-  const todayE=entries.filter(e=>e.date.slice(0,10)===tk);
-  const pastE =entries.filter(e=>e.date.slice(0,10)!==tk);
+  const groupedEntries = entries.reduce((groups, entry) => {
+    const key = entry.date.slice(0, 10);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(entry);
+    return groups;
+  }, {});
+  const orderedDays = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
+  const todayE = groupedEntries[tk] || [];
+  const pastDays = orderedDays.filter((day) => day !== tk);
   const add=()=>{if(!text.trim())return;setEntries(p=>[{id:`j${Date.now()}`,date:new Date().toISOString(),text:text.trim()},...p]);setText("");};
   const del=id=>setEntries(p=>p.filter(e=>e.id!==id));
   return (
@@ -760,8 +788,8 @@ function JournalTab({entries,setEntries}) {
           <button onClick={add} style={btn}>save entry</button>
         </div>
       </div>
-      {todayE.length>0&&<><span style={sec}>today</span>{todayE.map(e=><JournalCard key={e.id} entry={e} onDelete={()=>del(e.id)}/>)}</>}
-      {pastE.length>0&&<div style={{marginTop:16}}><span style={sec}>earlier</span>{pastE.slice(0,15).map(e=><JournalCard key={e.id} entry={e} onDelete={()=>del(e.id)}/>)}</div>}
+      {todayE.length>0&&<><span style={sec}>today</span><GratitudeDateCard dateKey={tk} entries={todayE} onDelete={del} /></>}
+      {pastDays.length>0&&<div style={{marginTop:16}}><span style={sec}>earlier</span>{pastDays.slice(0,10).map(day=><GratitudeDateCard key={day} dateKey={day} entries={groupedEntries[day]} onDelete={del} />)}</div>}
       {entries.length===0&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>your gratitude entries will live here</p>}
     </div>
   );
