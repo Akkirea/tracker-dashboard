@@ -1280,6 +1280,12 @@ export default function App() {
 }, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, goals, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
+  const accountLabel = typeof userEmail === "string" ? userEmail : "";
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('email');
+    setToken(null);
+  };
 
   if (!token) return <LoginScreen onAuth={(t, e) => { setToken(t); setUserEmail(e); }} />;
   return (
@@ -1327,12 +1333,14 @@ export default function App() {
             })}
           </div>
 
-          <div style={{marginTop:"auto",padding:"14px 20px 18px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
-              <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{userEmail}</p>
-              <button onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('email'); setToken(null); }} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
+          {isDesktop && (
+            <div style={{marginTop:"auto",padding:"14px 20px 18px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+                <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{accountLabel}</p>
+                <button onClick={logout} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
+              </div>
             </div>
-          </div>
+          )}
         </aside>
 
         <main style={{display:"flex",flexDirection:"column",minWidth:0}}>
@@ -1345,7 +1353,17 @@ export default function App() {
                     {TABS.find((item) => item.id === tab)?.label || "today"}
                   </div>
                 </div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:isDesktop ? "flex-start" : "space-between",width:isDesktop ? "auto" : "100%"}}>
+                  {!isDesktop && (
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginBottom:4}}>
+                      {accountLabel ? (
+                        <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{accountLabel}</p>
+                      ) : (
+                        <span />
+                      )}
+                      <button onClick={logout} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
+                    </div>
+                  )}
                   <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"12px 14px",minWidth:130}}>
                     <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>anchors</div>
                     <div style={{fontFamily:"'Outfit',sans-serif",fontSize:22,color:C.text,marginTop:6}}>{anchorDone.length}/{anchors.length}</div>
