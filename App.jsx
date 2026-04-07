@@ -17,6 +17,10 @@ const fmtShort = (iso) => new Date(iso).toLocaleDateString("en-US",{month:"short
 const fmtFull  = () => new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
 const pad = (v) => String(v).padStart(2, "0");
 const toDateInputValue = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const toLocalIsoString = (date = new Date()) => {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString();
+};
 const fmtMonthYear = (date) => date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 const fmtWeekday = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
 const isSameMonth = (left, right) =>
@@ -732,57 +736,88 @@ function RecipesTab({recipes,setRecipes}) {
 
 // ── JOURNAL ───────────────────────────────────────────────────────────────
 function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
+  const folderBorder = open ? `${C.gold}88` : C.borderMid;
+  const folderFill = open
+    ? `linear-gradient(180deg, rgba(201,168,76,0.16) 0%, rgba(27,21,16,0.96) 72%)`
+    : `linear-gradient(180deg, rgba(201,168,76,0.10) 0%, rgba(27,21,16,0.92) 78%)`;
+  const closedLayer = {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    height: 48,
+    borderRadius: 18,
+    border: `1px solid ${C.border}`,
+    background: "linear-gradient(180deg, rgba(201,168,76,0.07), rgba(27,21,16,0.82))",
+  };
+
   return (
     <div style={{marginBottom:12}}>
-      <button
-        onClick={onToggle}
-        style={{
-          width:"100%",
-          background:open ? `${C.accent}14` : C.card,
-          border:`1px solid ${open ? C.accent : C.border}`,
-          borderRadius:16,
-          padding:"14px 16px 13px",
-          cursor:"pointer",
-          textAlign:"left",
-          position:"relative",
-          overflow:"hidden",
-        }}
-      >
-        <div
+      <div style={{position:"relative",paddingTop:22}}>
+        {!open && (
+          <>
+            <div style={{ ...closedLayer, top: 34, opacity: 0.55 }} />
+            <div style={{ ...closedLayer, top: 28, left: 8, right: 20, opacity: 0.75 }} />
+          </>
+        )}
+        <button
+          onClick={onToggle}
           style={{
             position:"absolute",
             top:0,
-            left:18,
-            width:72,
-            height:10,
-            borderBottomLeftRadius:8,
-            borderBottomRightRadius:8,
-            background:open ? `${C.accent}33` : `${C.gold}22`,
-            borderLeft:`1px solid ${open ? `${C.accent}55` : `${C.border}`}`,
-            borderRight:`1px solid ${open ? `${C.accent}55` : `${C.border}`}`,
-            borderBottom:`1px solid ${open ? `${C.accent}55` : `${C.border}`}`,
+            left:16,
+            minWidth:138,
+            maxWidth:"58%",
+            background:open ? `linear-gradient(180deg, rgba(201,168,76,0.22), rgba(196,105,74,0.18))` : `linear-gradient(180deg, rgba(201,168,76,0.20), rgba(201,168,76,0.10))`,
+            border:`1px solid ${folderBorder}`,
+            borderBottom:"none",
+            borderTopLeftRadius:18,
+            borderTopRightRadius:18,
+            borderBottomLeftRadius:10,
+            borderBottomRightRadius:10,
+            padding:"12px 16px 10px",
+            cursor:"pointer",
+            textAlign:"left",
+            zIndex:4,
+            boxShadow:open ? "0 10px 20px rgba(0,0,0,0.14)" : "none",
           }}
-        />
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,paddingTop:6}}>
-          <div>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:C.text,lineHeight:1}}>
-              {fmtShort(dateKey)}
-            </div>
-            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,marginTop:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              {fmtWeekday(dateKey)}
-            </div>
+        >
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:C.text,lineHeight:1}}>
+            {fmtShort(dateKey)}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,marginTop:5,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+            {fmtWeekday(dateKey)}
+          </div>
+        </button>
+
+        <button
+          onClick={onToggle}
+          style={{
+            width:"100%",
+            background:folderFill,
+            border:`1px solid ${folderBorder}`,
+            borderRadius:22,
+            padding: open ? "30px 18px 16px" : "30px 18px 12px",
+            cursor:"pointer",
+            textAlign:"left",
+            position:"relative",
+            overflow:"hidden",
+            minHeight: open ? 94 : 82,
+            zIndex:3,
+            boxShadow:open ? "0 18px 34px rgba(0,0,0,0.18)" : "0 10px 18px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div style={{position:"absolute",top:0,left:0,right:0,height:54,background:"linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0))"}} />
+          <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:10,position:"relative"}}>
             <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
               {entries.length} filed
             </div>
-            <span style={{fontSize:12,color:open ? C.accent : C.textDim}}>{open ? "▲" : "▼"}</span>
+            <span style={{fontSize:12,color:open ? C.gold : C.textDim}}>{open ? "▲" : "▼"}</span>
           </div>
-        </div>
-      </button>
+        </button>
+      </div>
       {open && (
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",borderBottomLeftRadius:16,borderBottomRightRadius:16,padding:"14px 16px 12px",marginTop:-10}}>
-          <div style={{display:"grid",gap:10,marginTop:8}}>
+        <div style={{background:`linear-gradient(180deg, rgba(20,16,9,0.98), rgba(27,21,16,0.96))`,border:`1px solid ${folderBorder}`,borderTop:"none",borderBottomLeftRadius:22,borderBottomRightRadius:22,padding:"14px 16px 12px",marginTop:-14,boxShadow:"0 18px 34px rgba(0,0,0,0.18)"}}>
+          <div style={{display:"grid",gap:10,marginTop:10}}>
             {entries.map((entry, index) => (
               <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start",paddingTop:index === 0 ? 0 : 10,borderTop:index === 0 ? "none" : `1px solid ${C.border}`}}>
                 <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -811,10 +846,10 @@ function JournalTab({entries,setEntries}) {
     return groups;
   }, {});
   const orderedDays = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
-  const [openDay, setOpenDay] = useState(() => orderedDays[0] || null);
+  const [openDay, setOpenDay] = useState(null);
   const todayE = groupedEntries[tk] || [];
   const archiveDays = orderedDays.filter((day) => day !== tk);
-  const add=()=>{if(!text.trim())return;setEntries(p=>[{id:`j${Date.now()}`,date:new Date().toISOString(),text:text.trim()},...p]);setText("");};
+  const add=()=>{if(!text.trim())return;setEntries(p=>[{id:`j${Date.now()}`,date:toLocalIsoString(),text:text.trim()},...p]);setText("");};
   const del=id=>setEntries(p=>p.filter(e=>e.id!==id));
 
   useEffect(() => {
@@ -822,8 +857,8 @@ function JournalTab({entries,setEntries}) {
       setOpenDay(null);
       return;
     }
-    if (!openDay || !groupedEntries[openDay]) {
-      setOpenDay(orderedDays[0]);
+    if (openDay && !groupedEntries[openDay]) {
+      setOpenDay(null);
     }
   }, [openDay, orderedDays, groupedEntries]);
 
