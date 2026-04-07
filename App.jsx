@@ -12,7 +12,7 @@ const C = {
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = () => toDateInputValue(new Date());
 const fmtShort = (iso) => new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"});
 const fmtFull  = () => new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
 const pad = (v) => String(v).padStart(2, "0");
@@ -135,6 +135,37 @@ const moveItem = (list, fromId, toId) => {
   return next;
 };
 
+const moveItemByOffset = (list, id, offset) => {
+  const fromIndex = list.findIndex((item) => item.id === id);
+  const toIndex = fromIndex + offset;
+  if (fromIndex === -1 || toIndex < 0 || toIndex >= list.length) return list;
+  const next = [...list];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+};
+
+const playCompletionBeep = () => {
+  if (typeof window === "undefined") return;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+  const audioContext = new AudioCtx();
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+  gain.gain.setValueAtTime(0.001, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.45);
+
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.45);
+  oscillator.onended = () => audioContext.close();
+};
+
 function useViewportWidth() {
   const [width, setWidth] = useState(() =>
     typeof window === "undefined" ? 1280 : window.innerWidth
@@ -158,7 +189,20 @@ function Ring({done, color=C.accent, size=26}) {
   );
 }
 
-function HabitRow({h, done, onToggle, onRemove, ringColor, draggable=false, onDragStart, onDragOver, onDrop, onDragEnd}) {
+function HabitRow({
+  h,
+  done,
+  onToggle,
+  onRemove,
+  ringColor,
+  draggable = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onMoveUp,
+  onMoveDown,
+}) {
   const [hov,setHov] = useState(false);
   return (
     <div onClick={onToggle} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
@@ -167,7 +211,13 @@ function HabitRow({h, done, onToggle, onRemove, ringColor, draggable=false, onDr
       <Ring done={done} color={ringColor||C.accent}/>
       <span style={{fontSize:17}}>{h.emoji}</span>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:done?C.textDim:C.text,textDecoration:done?"line-through":"none",letterSpacing:"0.02em"}}>{h.name}</span>
-      {draggable && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
+      {(onMoveUp || onMoveDown) && (
+        <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:6,alignItems:"center"}}>
+          {onMoveUp && <button onClick={onMoveUp} style={{...ghst,padding:"4px 8px",fontSize:11}}>↑</button>}
+          {onMoveDown && <button onClick={onMoveDown} style={{...ghst,padding:"4px 8px",fontSize:11}}>↓</button>}
+        </div>
+      )}
+      {draggable && !onMoveUp && !onMoveDown && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
       {hov && <button onClick={e=>{e.stopPropagation();onRemove();}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
     </div>
   );
@@ -486,7 +536,6 @@ function WimHofTab() {
 function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
   const [showAdd,setShowAdd] = useState(false);
   const [newVal,setNewVal]   = useState("");
-  const [dragId,setDragId]   = useState(null);
   const EMOJIS = ["✨","🌱","💫","🔥","🌙","⚡","🦋","🍃","🌸","🎋"];
   const toggle = id => setDoneIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const remove = id => {setHabits(p=>p.filter(h=>h.id!==id));setDoneIds(p=>p.filter(x=>x!==id));};
@@ -498,12 +547,9 @@ function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
   return (
     <div>
       <ProgressBar done={doneIds.length} total={habits.length} label="morning anchors"/>
-      {habits.map(h=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)}
-        draggable
-        onDragStart={()=>setDragId(h.id)}
-        onDragOver={e=>e.preventDefault()}
-        onDrop={()=>{ if (!dragId) return; setHabits(p=>moveItem(p, dragId, h.id)); setDragId(null); }}
-        onDragEnd={()=>setDragId(null)}
+      {habits.map((h, index)=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)}
+        onMoveUp={index > 0 ? () => setHabits((p) => moveItemByOffset(p, h.id, -1)) : undefined}
+        onMoveDown={index < habits.length - 1 ? () => setHabits((p) => moveItemByOffset(p, h.id, 1)) : undefined}
       />)}
       <AddRow show={showAdd} setShow={setShowAdd} val={newVal} setVal={setNewVal} onAdd={add} placeholder="add a morning anchor"/>
     </div>
@@ -514,18 +560,21 @@ function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
 function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
   const [showAdd,setShowAdd] = useState(false);
   const [newVal,setNewVal]   = useState("");
-  const [dragId,setDragId]   = useState(null);
-  const [timer,setTimer]     = useState(25*60);
+  const [timer,setTimer]     = useState(15*60);
   const [running,setRunning] = useState(false);
-  const [sessionMin,setSessionMin] = useState(25);
+  const [sessionMin,setSessionMin] = useState(15);
   const ref = useRef(null);
+  const didAlertRef = useRef(false);
   const EMOJIS = ["🎯","📝","💻","🔬","📊","🗂️","✏️","🔧","🧠","📐"];
   useEffect(()=>{
-    if(running){ref.current=setInterval(()=>setTimer(t=>{if(t<=1){clearInterval(ref.current);setRunning(false);return 0;}return t-1;}),1000);}
+    if(running){ref.current=setInterval(()=>setTimer(t=>{if(t<=1){clearInterval(ref.current);setRunning(false);didAlertRef.current = true;playCompletionBeep();return 0;}return t-1;}),1000);}
     else clearInterval(ref.current);
     return ()=>clearInterval(ref.current);
   },[running]);
-  const reset = ()=>{setRunning(false);setTimer(sessionMin*60);};
+  useEffect(() => {
+    if (timer > 0) didAlertRef.current = false;
+  }, [timer]);
+  const reset = ()=>{setRunning(false);setTimer(sessionMin*60);didAlertRef.current = false;};
   const fmt = s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const pct = ((sessionMin*60-timer)/(sessionMin*60))*100;
   const r=54, circ=2*Math.PI*r;
@@ -545,7 +594,7 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
           </div>
         </div>
         <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:14}}>
-          {[25,45,60].map(m=>(
+          {[15,25,45,60].map(m=>(
             <button key={m} onClick={()=>{setSessionMin(m);setTimer(m*60);setRunning(false);}}
               style={{...ghst,padding:"6px 14px",fontSize:12,border:`1px solid ${sessionMin===m?C.teal:C.borderMid}`,color:sessionMin===m?C.teal:C.textDim}}>{m}m</button>
           ))}
@@ -556,12 +605,12 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
         </div>
       </div>
       <ProgressBar done={doneIds.length} total={tasks.length} label="focus block" color={C.teal}/>
-      {tasks.map(h=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)} ringColor={C.teal}
-        draggable
-        onDragStart={()=>setDragId(h.id)}
-        onDragOver={e=>e.preventDefault()}
-        onDrop={()=>{ if (!dragId) return; setTasks(p=>moveItem(p, dragId, h.id)); setDragId(null); }}
-        onDragEnd={()=>setDragId(null)}
+      <p style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,margin:"-8px 0 18px"}}>
+        Timer plays a short beep when it reaches zero.
+      </p>
+      {tasks.map((h, index)=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)} ringColor={C.teal}
+        onMoveUp={index > 0 ? () => setTasks((p) => moveItemByOffset(p, h.id, -1)) : undefined}
+        onMoveDown={index < tasks.length - 1 ? () => setTasks((p) => moveItemByOffset(p, h.id, 1)) : undefined}
       />)}
       <AddRow show={showAdd} setShow={setShowAdd} val={newVal} setVal={setNewVal} onAdd={add} placeholder="add a focus task"/>
     </div>
@@ -569,7 +618,7 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
 }
 
 // ── GROCERY ───────────────────────────────────────────────────────────────
-function GroceryRow({item,onToggle,onRemove,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd}) {
+function GroceryRow({item,onToggle,onRemove,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd,onMoveUp,onMoveDown}) {
   const [hov,setHov]=useState(false);
   return (
     <div onClick={onToggle} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
@@ -578,7 +627,13 @@ function GroceryRow({item,onToggle,onRemove,draggable=false,onDragStart,onDragOv
       <Ring done={item.done} color={C.gold} size={24}/>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:item.done?C.textDim:C.text,textDecoration:item.done?"line-through":"none"}}>{item.name}</span>
       {item.qty&&<span style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,flexShrink:0}}>{item.qty}</span>}
-      {draggable && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
+      {(onMoveUp || onMoveDown) && (
+        <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:6}}>
+          {onMoveUp && <button onClick={onMoveUp} style={{...ghst,padding:"4px 8px",fontSize:11}}>↑</button>}
+          {onMoveDown && <button onClick={onMoveDown} style={{...ghst,padding:"4px 8px",fontSize:11}}>↓</button>}
+        </div>
+      )}
+      {draggable && !onMoveUp && !onMoveDown && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
       {hov&&<button onClick={e=>{e.stopPropagation();onRemove();}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
     </div>
   );
@@ -588,33 +643,28 @@ function GroceryTab({items,setItems}) {
   const [showAdd,setShowAdd]=useState(false);
   const [name,setName]=useState("");
   const [qty,setQty]=useState("");
-  const [dragId,setDragId]=useState(null);
   const toggle  = id=>setItems(p=>p.map(i=>i.id===id?{...i,done:!i.done}:i));
   const remove  = id=>setItems(p=>p.filter(i=>i.id!==id));
   const clearDone=()=>setItems(p=>p.filter(i=>!i.done));
   const add=()=>{if(!name.trim())return;setItems(p=>[...p,{id:`gr${Date.now()}`,name:name.trim().toLowerCase(),qty:qty.trim(),done:false}]);setName("");setQty("");setShowAdd(false);};
   const active=items.filter(i=>!i.done), done=items.filter(i=>i.done);
-  const reorderActive = (targetId) => {
-    if (!dragId) return;
-    setItems(p => {
-      const activeItems = p.filter(i => !i.done);
-      const doneItems = p.filter(i => i.done);
-      return [...moveItem(activeItems, dragId, targetId), ...doneItems];
-    });
-    setDragId(null);
-  };
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
         <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,margin:0}}>grocery list</p>
         {done.length>0&&<button onClick={clearDone} style={{background:"none",border:"none",color:C.textDim,fontFamily:"'Outfit',sans-serif",fontSize:12,cursor:"pointer"}}>clear checked ({done.length})</button>}
       </div>
-      {active.map(i=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)}
-        draggable
-        onDragStart={()=>setDragId(i.id)}
-        onDragOver={e=>e.preventDefault()}
-        onDrop={()=>reorderActive(i.id)}
-        onDragEnd={()=>setDragId(null)}
+      {active.map((i, index)=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)}
+        onMoveUp={index > 0 ? () => setItems((p) => {
+          const activeItems = p.filter((item) => !item.done);
+          const doneItems = p.filter((item) => item.done);
+          return [...moveItemByOffset(activeItems, i.id, -1), ...doneItems];
+        }) : undefined}
+        onMoveDown={index < active.length - 1 ? () => setItems((p) => {
+          const activeItems = p.filter((item) => !item.done);
+          const doneItems = p.filter((item) => item.done);
+          return [...moveItemByOffset(activeItems, i.id, 1), ...doneItems];
+        }) : undefined}
       />)}
       {showAdd?(
         <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
@@ -717,8 +767,74 @@ function JournalTab({entries,setEntries}) {
   );
 }
 
+// ── NOTES ────────────────────────────────────────────────────────────────
+function NotesTab({notes, setNotes}) {
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const add = () => {
+    if (!title.trim() && !text.trim()) return;
+    setNotes((current) => [
+      {
+        id: `n${Date.now()}`,
+        title: title.trim() || "untitled note",
+        text: text.trim(),
+        date: new Date().toISOString(),
+      },
+      ...current,
+    ]);
+    setTitle("");
+    setText("");
+  };
+  const remove = (id) => setNotes((current) => current.filter((note) => note.id !== id));
+
+  return (
+    <div>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 18px 14px",marginBottom:22}}>
+        <span style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,display:"block",marginBottom:10}}>quick notes</span>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="note title"
+          style={{...inp, marginBottom:10}}
+        />
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="write your note here..."
+          rows={5}
+          style={{...inp, resize:"vertical", lineHeight:1.7, fontFamily:"'Cormorant Garamond',serif", fontSize:16}}
+        />
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
+          <button onClick={add} style={btn}>save note</button>
+        </div>
+      </div>
+      {notes.length === 0 && (
+        <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>
+          your notes will live here
+        </p>
+      )}
+      {notes.map((note) => (
+        <div key={note.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:14,color:C.text}}>{note.title}</div>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,marginTop:4}}>{fmtShort(note.date)}</div>
+            </div>
+            <button onClick={() => remove(note.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0}}>remove</button>
+          </div>
+          {note.text && (
+            <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.textMid,lineHeight:1.7,margin:"12px 0 0",whiteSpace:"pre-wrap"}}>
+              {note.text}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── GOALS ─────────────────────────────────────────────────────────────────
-function GoalItem({goal,toggle,remove,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd}) {
+function GoalItem({goal,toggle,remove,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd,onMoveUp,onMoveDown}) {
   const [hov,setHov]=useState(false);
   return (
     <div onClick={()=>toggle(goal.id)} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
@@ -726,7 +842,13 @@ function GoalItem({goal,toggle,remove,draggable=false,onDragStart,onDragOver,onD
       style={{display:"flex",alignItems:"flex-start",gap:12,padding:"13px 16px",background:goal.done?"#1A1D14":C.card,border:`1px solid ${goal.done?"#252A1C":C.border}`,borderRadius:12,marginBottom:8,cursor:"pointer"}}>
       <Ring done={goal.done} color={C.gold} size={24}/>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:goal.done?C.textDim:C.text,textDecoration:goal.done?"line-through":"none",lineHeight:1.6,paddingTop:2}}>{goal.text}</span>
-      {draggable && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
+      {(onMoveUp || onMoveDown) && (
+        <div onClick={(e)=>e.stopPropagation()} style={{display:"flex",gap:6}}>
+          {onMoveUp && <button onClick={onMoveUp} style={{...ghst,padding:"4px 8px",fontSize:11}}>↑</button>}
+          {onMoveDown && <button onClick={onMoveDown} style={{...ghst,padding:"4px 8px",fontSize:11}}>↓</button>}
+        </div>
+      )}
+      {draggable && !onMoveUp && !onMoveDown && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
       {hov&&<button onClick={e=>{e.stopPropagation();remove(goal.id);}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
     </div>
   );
@@ -735,29 +857,24 @@ function GoalItem({goal,toggle,remove,draggable=false,onDragStart,onDragOver,onD
 function GoalsTab({goals,setGoals}) {
   const [showAdd,setShowAdd]=useState(false);
   const [newVal,setNewVal]=useState("");
-  const [dragId,setDragId]=useState(null);
   const toggle=id=>setGoals(p=>p.map(g=>g.id===id?{...g,done:!g.done}:g));
   const remove=id=>setGoals(p=>p.filter(g=>g.id!==id));
   const add=()=>{if(!newVal.trim())return;setGoals(p=>[...p,{id:`d${Date.now()}`,text:newVal.trim(),done:false}]);setNewVal("");setShowAdd(false);};
   const active=goals.filter(g=>!g.done), done=goals.filter(g=>g.done);
-  const reorderActive = (targetId) => {
-    if (!dragId) return;
-    setGoals(p => {
-      const activeGoals = p.filter(g => !g.done);
-      const doneGoals = p.filter(g => g.done);
-      return [...moveItem(activeGoals, dragId, targetId), ...doneGoals];
-    });
-    setDragId(null);
-  };
   return (
     <div>
       <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,marginBottom:22}}>what you're building toward</p>
-      {active.map(g=><GoalItem key={g.id} goal={g} toggle={toggle} remove={remove}
-        draggable
-        onDragStart={()=>setDragId(g.id)}
-        onDragOver={e=>e.preventDefault()}
-        onDrop={()=>reorderActive(g.id)}
-        onDragEnd={()=>setDragId(null)}
+      {active.map((g, index)=><GoalItem key={g.id} goal={g} toggle={toggle} remove={remove}
+        onMoveUp={index > 0 ? () => setGoals((p) => {
+          const activeGoals = p.filter((goal) => !goal.done);
+          const doneGoals = p.filter((goal) => goal.done);
+          return [...moveItemByOffset(activeGoals, g.id, -1), ...doneGoals];
+        }) : undefined}
+        onMoveDown={index < active.length - 1 ? () => setGoals((p) => {
+          const activeGoals = p.filter((goal) => !goal.done);
+          const doneGoals = p.filter((goal) => goal.done);
+          return [...moveItemByOffset(activeGoals, g.id, 1), ...doneGoals];
+        }) : undefined}
       />)}
       <AddRow show={showAdd} setShow={setShowAdd} val={newVal} setVal={setNewVal} onAdd={add} placeholder="a dream or goal"/>
       {done.length>0&&<div style={{marginTop:28}}><span style={sec}>manifested ✦</span>{done.map(g=><GoalItem key={g.id} goal={g} toggle={toggle} remove={remove}/>)}</div>}
@@ -1162,12 +1279,21 @@ function ScheduleTab({ events, setEvents, wide = false }) {
 }
 
 // ── ROOT ──────────────────────────────────────────────────────────────────
+function TabPanel({ active, children }) {
+  return (
+    <div style={{ display: active ? "block" : "none" }}>
+      {children}
+    </div>
+  );
+}
+
 const TABS = [
   {id:"breathe", icon:"❄", label:"breathe" },
   {id:"today",   icon:"◎", label:"today"   },
   {id:"focus",   icon:"⊙", label:"focus"   },
   {id:"journal", icon:"✦", label:"gratitude" },
   {id:"schedule",icon:"☷", label:"schedule" },
+  {id:"notes",   icon:"✎", label:"notes"   },
   {id:"grocery", icon:"◻", label:"grocery" },
   {id:"recipes", icon:"✿", label:"recipes" },
   {id:"goals",   icon:"△", label:"dreams"  },
@@ -1188,8 +1314,8 @@ function LoginScreen({ onAuth }) {
     setLoading(false);
     if (res.error) return setError(res.error);
     localStorage.setItem('token', res.token);
-    localStorage.setItem('email', res.email);
-    onAuth(res.token, res.email);
+    localStorage.setItem('email', email);
+    onAuth(res.token, email);
   };
 
   return (
@@ -1224,7 +1350,10 @@ export default function App() {
   const isDesktop = viewportWidth >= 1080;
   const isWideContent = viewportWidth >= 1280;
   const [token, setToken] = useState(() => localStorage.getItem('token'));
-  const [userEmail, setUserEmail] = useState(() => localStorage.getItem('email'));
+  const [userEmail, setUserEmail] = useState(() => {
+    const saved = localStorage.getItem('email');
+    return saved && saved !== "undefined" ? saved : "";
+  });
   const [tab,setTab]               = useState(() => localStorage.getItem('tab') || "today");
   const [anchors,setAnchors]       = useState(DEFAULT_ANCHORS);
   const [anchorDone,setAnchorDone] = useState([]);
@@ -1233,6 +1362,7 @@ export default function App() {
   const [grocery,setGrocery]       = useState([]);
   const [recipes,setRecipes]       = useState([]);
   const [journal,setJournal]       = useState([]);
+  const [notes,setNotes]           = useState([]);
   const [goals,setGoals]           = useState([]);
   const [schedule,setSchedule]     = useState([]);
   const [cycleData,setCycleData]   = useState({lastPeriod:"",cycleLength:28,periodLength:5});
@@ -1259,12 +1389,13 @@ export default function App() {
     if (remote.error) { localStorage.removeItem('token'); setToken(null); return; }
     const tk = todayKey();
     if (remote.anchors) setAnchors(remote.anchors);
-    if (remote[`adone-${tk}`]) setAnchorDone(remote[`adone-${tk}`]);
+    setAnchorDone(remote[`adone-${tk}`] || []);
     if (remote.focusTasks) setFocusTasks(remote.focusTasks);
-    if (remote[`fdone-${tk}`]) setFocusDone(remote[`fdone-${tk}`]);
+    setFocusDone(remote[`fdone-${tk}`] || []);
     if (remote.grocery) setGrocery(remote.grocery);
     if (remote.recipes) setRecipes(remote.recipes);
     if (remote.journal) setJournal(remote.journal);
+    if (remote.notes) setNotes(remote.notes);
     if (remote.goals) setGoals(remote.goals);
     if (remote.schedule) setSchedule(sortSchedule(remote.schedule));
     if (remote.cycle) setCycleData(remote.cycle);
@@ -1273,11 +1404,21 @@ export default function App() {
 }, [token]);
 
   useEffect(() => {
+    if (!loaded || !token) return;
+    (async () => {
+      const remote = await api.load(token);
+      if (remote.error) return;
+      setAnchorDone(remote[`adone-${tk}`] || []);
+      setFocusDone(remote[`fdone-${tk}`] || []);
+    })();
+  }, [tk, loaded, token]);
+
+  useEffect(() => {
   if (!loaded || !token) return;
   const tk = todayKey();
-  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, recipes, journal, goals, schedule, cycle: cycleData };
+  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, recipes, journal, notes, goals, schedule, cycle: cycleData };
   api.save(token, data);
-}, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, goals, schedule, cycleData, loaded]);
+}, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, notes, goals, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
   const logout = () => {
@@ -1351,15 +1492,16 @@ export default function App() {
             </div>
 
             <div style={{flex:1,padding:isDesktop ? "28px 30px 34px" : "22px 18px 40px",overflowY:"auto"}}>
-              {tab==="today"    && <TodayTab habits={anchors} doneIds={anchorDone} setDoneIds={setAnchorDone} setHabits={setAnchors}/>}
-              {tab==="breathe"  && <WimHofTab/>}
-              {tab==="focus"    && <FocusTab tasks={focusTasks} doneIds={focusDone} setDoneIds={setFocusDone} setTasks={setFocusTasks}/>}
-              {tab==="schedule" && <ScheduleTab events={schedule} setEvents={setSchedule} wide={isWideContent}/>}
-              {tab==="grocery"  && <GroceryTab items={grocery} setItems={setGrocery}/>}
-              {tab==="recipes"  && <RecipesTab recipes={recipes} setRecipes={setRecipes}/>}
-              {tab==="journal"  && <JournalTab entries={journal} setEntries={setJournal}/>}
-              {tab==="goals"    && <GoalsTab goals={goals} setGoals={setGoals}/>}
-              {tab==="cycle"    && <CycleTab cycleData={cycleData} setCycleData={setCycleData} info={cycleInfo}/>}
+              <TabPanel active={tab==="today"}><TodayTab habits={anchors} doneIds={anchorDone} setDoneIds={setAnchorDone} setHabits={setAnchors}/></TabPanel>
+              <TabPanel active={tab==="breathe"}><WimHofTab/></TabPanel>
+              <TabPanel active={tab==="focus"}><FocusTab tasks={focusTasks} doneIds={focusDone} setDoneIds={setFocusDone} setTasks={setFocusTasks}/></TabPanel>
+              <TabPanel active={tab==="journal"}><JournalTab entries={journal} setEntries={setJournal}/></TabPanel>
+              <TabPanel active={tab==="schedule"}><ScheduleTab events={schedule} setEvents={setSchedule} wide={isWideContent}/></TabPanel>
+              <TabPanel active={tab==="notes"}><NotesTab notes={notes} setNotes={setNotes}/></TabPanel>
+              <TabPanel active={tab==="grocery"}><GroceryTab items={grocery} setItems={setGrocery}/></TabPanel>
+              <TabPanel active={tab==="recipes"}><RecipesTab recipes={recipes} setRecipes={setRecipes}/></TabPanel>
+              <TabPanel active={tab==="goals"}><GoalsTab goals={goals} setGoals={setGoals}/></TabPanel>
+              <TabPanel active={tab==="cycle"}><CycleTab cycleData={cycleData} setCycleData={setCycleData} info={cycleInfo}/></TabPanel>
             </div>
           </div>
         </main>
