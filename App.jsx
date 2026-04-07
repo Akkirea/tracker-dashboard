@@ -731,35 +731,72 @@ function RecipesTab({recipes,setRecipes}) {
 }
 
 // ── JOURNAL ───────────────────────────────────────────────────────────────
-function GratitudeDateCard({ dateKey, entries, onDelete }) {
+function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
   return (
-    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 16px 14px",marginBottom:12}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:12}}>
-        <div>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:C.text,lineHeight:1}}>
-            {fmtWeekday(dateKey)}
+    <div style={{marginBottom:12}}>
+      <button
+        onClick={onToggle}
+        style={{
+          width:"100%",
+          background:open ? `${C.accent}14` : C.card,
+          border:`1px solid ${open ? C.accent : C.border}`,
+          borderRadius:16,
+          padding:"14px 16px 13px",
+          cursor:"pointer",
+          textAlign:"left",
+          position:"relative",
+          overflow:"hidden",
+        }}
+      >
+        <div
+          style={{
+            position:"absolute",
+            top:0,
+            left:18,
+            width:72,
+            height:10,
+            borderBottomLeftRadius:8,
+            borderBottomRightRadius:8,
+            background:open ? `${C.accent}33` : `${C.gold}22`,
+            borderLeft:`1px solid ${open ? `${C.accent}55` : `${C.border}`}`,
+            borderRight:`1px solid ${open ? `${C.accent}55` : `${C.border}`}`,
+            borderBottom:`1px solid ${open ? `${C.accent}55` : `${C.border}`}`,
+          }}
+        />
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,paddingTop:6}}>
+          <div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:C.text,lineHeight:1}}>
+              {fmtShort(dateKey)}
+            </div>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,marginTop:5,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              {fmtWeekday(dateKey)}
+            </div>
           </div>
-          <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,marginTop:4}}>
-            {fmtShort(dateKey)}
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
+              {entries.length} filed
+            </div>
+            <span style={{fontSize:12,color:open ? C.accent : C.textDim}}>{open ? "▲" : "▼"}</span>
           </div>
         </div>
-        <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
-          {entries.length} saved
-        </div>
-      </div>
-      <div style={{display:"grid",gap:10}}>
-        {entries.map((entry, index) => (
-          <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start",paddingTop:index === 0 ? 0 : 10,borderTop:index === 0 ? "none" : `1px solid ${C.border}`}}>
-            <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.accent}}>{index + 1}</span>
-            </div>
-            <div style={{flex:1}}>
-              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
-            </div>
-            <button onClick={() => onDelete(entry.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
+      </button>
+      {open && (
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderTop:"none",borderBottomLeftRadius:16,borderBottomRightRadius:16,padding:"14px 16px 12px",marginTop:-10}}>
+          <div style={{display:"grid",gap:10,marginTop:8}}>
+            {entries.map((entry, index) => (
+              <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start",paddingTop:index === 0 ? 0 : 10,borderTop:index === 0 ? "none" : `1px solid ${C.border}`}}>
+                <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.accent}}>{index + 1}</span>
+                </div>
+                <div style={{flex:1}}>
+                  <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
+                </div>
+                <button onClick={() => onDelete(entry.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -774,10 +811,22 @@ function JournalTab({entries,setEntries}) {
     return groups;
   }, {});
   const orderedDays = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
+  const [openDay, setOpenDay] = useState(() => orderedDays[0] || null);
   const todayE = groupedEntries[tk] || [];
-  const pastDays = orderedDays.filter((day) => day !== tk);
+  const archiveDays = orderedDays.filter((day) => day !== tk);
   const add=()=>{if(!text.trim())return;setEntries(p=>[{id:`j${Date.now()}`,date:new Date().toISOString(),text:text.trim()},...p]);setText("");};
   const del=id=>setEntries(p=>p.filter(e=>e.id!==id));
+
+  useEffect(() => {
+    if (!orderedDays.length) {
+      setOpenDay(null);
+      return;
+    }
+    if (!openDay || !groupedEntries[openDay]) {
+      setOpenDay(orderedDays[0]);
+    }
+  }, [openDay, orderedDays, groupedEntries]);
+
   return (
     <div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 18px 14px",marginBottom:22}}>
@@ -788,8 +837,33 @@ function JournalTab({entries,setEntries}) {
           <button onClick={add} style={btn}>save entry</button>
         </div>
       </div>
-      {todayE.length>0&&<><span style={sec}>today</span><GratitudeDateCard dateKey={tk} entries={todayE} onDelete={del} /></>}
-      {pastDays.length>0&&<div style={{marginTop:16}}><span style={sec}>earlier</span>{pastDays.slice(0,10).map(day=><GratitudeDateCard key={day} dateKey={day} entries={groupedEntries[day]} onDelete={del} />)}</div>}
+      {todayE.length>0&&(
+        <>
+          <span style={sec}>today's folder</span>
+          <GratitudeFolder
+            dateKey={tk}
+            entries={todayE}
+            open={openDay === tk}
+            onToggle={() => setOpenDay((current) => current === tk ? null : tk)}
+            onDelete={del}
+          />
+        </>
+      )}
+      {archiveDays.length>0&&(
+        <div style={{marginTop:16}}>
+          <span style={sec}>archive</span>
+          {archiveDays.slice(0,12).map((day) => (
+            <GratitudeFolder
+              key={day}
+              dateKey={day}
+              entries={groupedEntries[day]}
+              open={openDay === day}
+              onToggle={() => setOpenDay((current) => current === day ? null : day)}
+              onDelete={del}
+            />
+          ))}
+        </div>
+      )}
       {entries.length===0&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>your gratitude entries will live here</p>}
     </div>
   );
