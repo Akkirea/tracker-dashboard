@@ -1280,7 +1280,6 @@ export default function App() {
 }, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, goals, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
-  const accountLabel = typeof userEmail === "string" ? userEmail : "";
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('email');
@@ -1336,7 +1335,7 @@ export default function App() {
           {isDesktop && (
             <div style={{marginTop:"auto",padding:"14px 20px 18px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
-                <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{accountLabel}</p>
+                <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{typeof userEmail === "string" ? userEmail : ""}</p>
                 <button onClick={logout} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
               </div>
             </div>
@@ -1346,33 +1345,8 @@ export default function App() {
         <main style={{display:"flex",flexDirection:"column",minWidth:0}}>
           <div style={{background:C.surface,border:isDesktop ? `1px solid ${C.border}` : "none",borderRadius:isDesktop ? 28 : 0,display:"flex",flexDirection:"column",minHeight:isDesktop ? "calc(100vh - 48px)" : "auto",overflow:"hidden"}}>
             <div style={{padding:isDesktop ? "30px 30px 18px" : "22px 18px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,flexWrap:"wrap"}}>
-                <div>
-                  <span style={sec}>dashboard</span>
-                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isDesktop ? 38 : 30,color:C.text,lineHeight:1}}>
-                    {TABS.find((item) => item.id === tab)?.label || "today"}
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:isDesktop ? "flex-start" : "space-between",width:isDesktop ? "auto" : "100%"}}>
-                  {!isDesktop && (
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",marginBottom:4}}>
-                      {accountLabel ? (
-                        <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{accountLabel}</p>
-                      ) : (
-                        <span />
-                      )}
-                      <button onClick={logout} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
-                    </div>
-                  )}
-                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"12px 14px",minWidth:130}}>
-                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>anchors</div>
-                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:22,color:C.text,marginTop:6}}>{anchorDone.length}/{anchors.length}</div>
-                  </div>
-                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"12px 14px",minWidth:130}}>
-                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>upcoming</div>
-                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:22,color:C.text,marginTop:6}}>{schedule.filter((item) => item.date >= tk).length}</div>
-                  </div>
-                </div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isDesktop ? 38 : 30,color:C.text,lineHeight:1}}>
+                {TABS.find((item) => item.id === tab)?.label || "today"}
               </div>
             </div>
 
