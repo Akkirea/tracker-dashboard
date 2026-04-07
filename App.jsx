@@ -112,6 +112,17 @@ const lbl  = {display:"block",fontFamily:"'Outfit',sans-serif",fontSize:11,color
 const sec  = {fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,letterSpacing:"0.1em",marginBottom:12,display:"block"};
 const dash = {width:"100%",background:"none",border:`1px dashed ${C.borderMid}`,borderRadius:12,padding:"12px",color:C.textDim,fontFamily:"'Outfit',sans-serif",fontSize:13,cursor:"pointer",letterSpacing:"0.05em",marginTop:10};
 
+const moveItem = (list, fromId, toId) => {
+  if (fromId === toId) return list;
+  const fromIndex = list.findIndex(item => item.id === fromId);
+  const toIndex = list.findIndex(item => item.id === toId);
+  if (fromIndex === -1 || toIndex === -1) return list;
+  const next = [...list];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+};
+
 // ── MICRO COMPONENTS ─────────────────────────────────────────────────────
 function Ring({done, color=C.accent, size=26}) {
   return (
@@ -121,14 +132,16 @@ function Ring({done, color=C.accent, size=26}) {
   );
 }
 
-function HabitRow({h, done, onToggle, onRemove, ringColor}) {
+function HabitRow({h, done, onToggle, onRemove, ringColor, draggable=false, onDragStart, onDragOver, onDrop, onDragEnd}) {
   const [hov,setHov] = useState(false);
   return (
     <div onClick={onToggle} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      draggable={draggable} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd}
       style={{display:"flex",alignItems:"center",gap:14,padding:"13px 16px",background:done?"#1C1B12":C.card,border:`1px solid ${done?"#2C2A18":C.border}`,borderRadius:12,cursor:"pointer",transition:"background 0.15s",marginBottom:8}}>
       <Ring done={done} color={ringColor||C.accent}/>
       <span style={{fontSize:17}}>{h.emoji}</span>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:done?C.textDim:C.text,textDecoration:done?"line-through":"none",letterSpacing:"0.02em"}}>{h.name}</span>
+      {draggable && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
       {hov && <button onClick={e=>{e.stopPropagation();onRemove();}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
     </div>
   );
@@ -447,6 +460,7 @@ function WimHofTab() {
 function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
   const [showAdd,setShowAdd] = useState(false);
   const [newVal,setNewVal]   = useState("");
+  const [dragId,setDragId]   = useState(null);
   const EMOJIS = ["✨","🌱","💫","🔥","🌙","⚡","🦋","🍃","🌸","🎋"];
   const toggle = id => setDoneIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const remove = id => {setHabits(p=>p.filter(h=>h.id!==id));setDoneIds(p=>p.filter(x=>x!==id));};
@@ -458,7 +472,13 @@ function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
   return (
     <div>
       <ProgressBar done={doneIds.length} total={habits.length} label="morning anchors"/>
-      {habits.map(h=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)}/>)}
+      {habits.map(h=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)}
+        draggable
+        onDragStart={()=>setDragId(h.id)}
+        onDragOver={e=>e.preventDefault()}
+        onDrop={()=>{ if (!dragId) return; setHabits(p=>moveItem(p, dragId, h.id)); setDragId(null); }}
+        onDragEnd={()=>setDragId(null)}
+      />)}
       <AddRow show={showAdd} setShow={setShowAdd} val={newVal} setVal={setNewVal} onAdd={add} placeholder="add a morning anchor"/>
     </div>
   );
@@ -468,6 +488,7 @@ function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
 function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
   const [showAdd,setShowAdd] = useState(false);
   const [newVal,setNewVal]   = useState("");
+  const [dragId,setDragId]   = useState(null);
   const [timer,setTimer]     = useState(25*60);
   const [running,setRunning] = useState(false);
   const [sessionMin,setSessionMin] = useState(25);
@@ -509,21 +530,29 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
         </div>
       </div>
       <ProgressBar done={doneIds.length} total={tasks.length} label="focus block" color={C.teal}/>
-      {tasks.map(h=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)} ringColor={C.teal}/>)}
+      {tasks.map(h=><HabitRow key={h.id} h={h} done={doneIds.includes(h.id)} onToggle={()=>toggle(h.id)} onRemove={()=>remove(h.id)} ringColor={C.teal}
+        draggable
+        onDragStart={()=>setDragId(h.id)}
+        onDragOver={e=>e.preventDefault()}
+        onDrop={()=>{ if (!dragId) return; setTasks(p=>moveItem(p, dragId, h.id)); setDragId(null); }}
+        onDragEnd={()=>setDragId(null)}
+      />)}
       <AddRow show={showAdd} setShow={setShowAdd} val={newVal} setVal={setNewVal} onAdd={add} placeholder="add a focus task"/>
     </div>
   );
 }
 
 // ── GROCERY ───────────────────────────────────────────────────────────────
-function GroceryRow({item,onToggle,onRemove}) {
+function GroceryRow({item,onToggle,onRemove,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd}) {
   const [hov,setHov]=useState(false);
   return (
     <div onClick={onToggle} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      draggable={draggable} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd}
       style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:item.done?"#1C1B12":C.card,border:`1px solid ${item.done?"#2C2A18":C.border}`,borderRadius:12,cursor:"pointer",marginBottom:8}}>
       <Ring done={item.done} color={C.gold} size={24}/>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:item.done?C.textDim:C.text,textDecoration:item.done?"line-through":"none"}}>{item.name}</span>
       {item.qty&&<span style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,flexShrink:0}}>{item.qty}</span>}
+      {draggable && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
       {hov&&<button onClick={e=>{e.stopPropagation();onRemove();}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
     </div>
   );
@@ -533,18 +562,34 @@ function GroceryTab({items,setItems}) {
   const [showAdd,setShowAdd]=useState(false);
   const [name,setName]=useState("");
   const [qty,setQty]=useState("");
+  const [dragId,setDragId]=useState(null);
   const toggle  = id=>setItems(p=>p.map(i=>i.id===id?{...i,done:!i.done}:i));
   const remove  = id=>setItems(p=>p.filter(i=>i.id!==id));
   const clearDone=()=>setItems(p=>p.filter(i=>!i.done));
   const add=()=>{if(!name.trim())return;setItems(p=>[...p,{id:`gr${Date.now()}`,name:name.trim().toLowerCase(),qty:qty.trim(),done:false}]);setName("");setQty("");setShowAdd(false);};
   const active=items.filter(i=>!i.done), done=items.filter(i=>i.done);
+  const reorderActive = (targetId) => {
+    if (!dragId) return;
+    setItems(p => {
+      const activeItems = p.filter(i => !i.done);
+      const doneItems = p.filter(i => i.done);
+      return [...moveItem(activeItems, dragId, targetId), ...doneItems];
+    });
+    setDragId(null);
+  };
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
         <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,margin:0}}>grocery list</p>
         {done.length>0&&<button onClick={clearDone} style={{background:"none",border:"none",color:C.textDim,fontFamily:"'Outfit',sans-serif",fontSize:12,cursor:"pointer"}}>clear checked ({done.length})</button>}
       </div>
-      {active.map(i=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)}/>)}
+      {active.map(i=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)}
+        draggable
+        onDragStart={()=>setDragId(i.id)}
+        onDragOver={e=>e.preventDefault()}
+        onDrop={()=>reorderActive(i.id)}
+        onDragEnd={()=>setDragId(null)}
+      />)}
       {showAdd?(
         <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap"}}>
           <input autoFocus value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="item name" style={{...inp,flex:2,minWidth:0}}/>
@@ -647,13 +692,15 @@ function JournalTab({entries,setEntries}) {
 }
 
 // ── GOALS ─────────────────────────────────────────────────────────────────
-function GoalItem({goal,toggle,remove}) {
+function GoalItem({goal,toggle,remove,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd}) {
   const [hov,setHov]=useState(false);
   return (
     <div onClick={()=>toggle(goal.id)} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      draggable={draggable} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd}
       style={{display:"flex",alignItems:"flex-start",gap:12,padding:"13px 16px",background:goal.done?"#1A1D14":C.card,border:`1px solid ${goal.done?"#252A1C":C.border}`,borderRadius:12,marginBottom:8,cursor:"pointer"}}>
       <Ring done={goal.done} color={C.gold} size={24}/>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:goal.done?C.textDim:C.text,textDecoration:goal.done?"line-through":"none",lineHeight:1.6,paddingTop:2}}>{goal.text}</span>
+      {draggable && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
       {hov&&<button onClick={e=>{e.stopPropagation();remove(goal.id);}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
     </div>
   );
@@ -662,14 +709,30 @@ function GoalItem({goal,toggle,remove}) {
 function GoalsTab({goals,setGoals}) {
   const [showAdd,setShowAdd]=useState(false);
   const [newVal,setNewVal]=useState("");
+  const [dragId,setDragId]=useState(null);
   const toggle=id=>setGoals(p=>p.map(g=>g.id===id?{...g,done:!g.done}:g));
   const remove=id=>setGoals(p=>p.filter(g=>g.id!==id));
   const add=()=>{if(!newVal.trim())return;setGoals(p=>[...p,{id:`d${Date.now()}`,text:newVal.trim(),done:false}]);setNewVal("");setShowAdd(false);};
   const active=goals.filter(g=>!g.done), done=goals.filter(g=>g.done);
+  const reorderActive = (targetId) => {
+    if (!dragId) return;
+    setGoals(p => {
+      const activeGoals = p.filter(g => !g.done);
+      const doneGoals = p.filter(g => g.done);
+      return [...moveItem(activeGoals, dragId, targetId), ...doneGoals];
+    });
+    setDragId(null);
+  };
   return (
     <div>
       <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,marginBottom:22}}>what you're building toward</p>
-      {active.map(g=><GoalItem key={g.id} goal={g} toggle={toggle} remove={remove}/>)}
+      {active.map(g=><GoalItem key={g.id} goal={g} toggle={toggle} remove={remove}
+        draggable
+        onDragStart={()=>setDragId(g.id)}
+        onDragOver={e=>e.preventDefault()}
+        onDrop={()=>reorderActive(g.id)}
+        onDragEnd={()=>setDragId(null)}
+      />)}
       <AddRow show={showAdd} setShow={setShowAdd} val={newVal} setVal={setNewVal} onAdd={add} placeholder="a dream or goal"/>
       {done.length>0&&<div style={{marginTop:28}}><span style={sec}>manifested ✦</span>{done.map(g=><GoalItem key={g.id} goal={g} toggle={toggle} remove={remove}/>)}</div>}
       {goals.length===0&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>your dreams live here — write them down</p>}
