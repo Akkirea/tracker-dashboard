@@ -15,6 +15,18 @@ const C = {
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const fmtShort = (iso) => new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"});
 const fmtFull  = () => new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+const pad = (v) => String(v).padStart(2, "0");
+const toDateInputValue = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const fmtMonthYear = (date) => date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+const fmtWeekday = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+const isSameMonth = (left, right) =>
+  left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+const sortSchedule = (items) =>
+  [...items].sort((a, b) => {
+    const left = `${a.date || ""}T${a.time || "99:99"}`;
+    const right = `${b.date || ""}T${b.time || "99:99"}`;
+    return left.localeCompare(right);
+  });
 
 const getCycleInfo = (lastStr, cycleLen, periodLen) => {
   if (!lastStr) return null;
@@ -122,6 +134,20 @@ const moveItem = (list, fromId, toId) => {
   next.splice(toIndex, 0, moved);
   return next;
 };
+
+function useViewportWidth() {
+  const [width, setWidth] = useState(() =>
+    typeof window === "undefined" ? 1280 : window.innerWidth
+  );
+
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return width;
+}
 
 // ── MICRO COMPONENTS ─────────────────────────────────────────────────────
 function Ring({done, color=C.accent, size=26}) {
@@ -806,11 +832,341 @@ function CycleTab({cycleData,setCycleData,info}) {
   );
 }
 
+// ── SCHEDULE ──────────────────────────────────────────────────────────────
+function ScheduleTab({ events, setEvents, wide = false }) {
+  const today = toDateInputValue(new Date());
+  const sortedEvents = sortSchedule(events);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [viewDate, setViewDate] = useState(() => {
+    const seed = sortedEvents[0]?.date ? new Date(`${sortedEvents[0].date}T00:00:00`) : new Date();
+    return new Date(seed.getFullYear(), seed.getMonth(), 1);
+  });
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    date: today,
+    time: "",
+    category: "personal",
+    notes: "",
+  });
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    const next = new Date(`${selectedDate}T00:00:00`);
+    if (!Number.isNaN(next.getTime())) {
+      setViewDate(new Date(next.getFullYear(), next.getMonth(), 1));
+      setForm((current) => ({ ...current, date: current.date || selectedDate }));
+    }
+  }, [selectedDate]);
+
+  const monthStart = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(gridStart);
+    day.setDate(gridStart.getDate() + index);
+    const key = toDateInputValue(day);
+    const dayEvents = sortedEvents.filter((event) => event.date === key);
+    return { day, key, dayEvents };
+  });
+
+  const selectedEvents = sortedEvents.filter((event) => event.date === selectedDate);
+  const monthEvents = sortedEvents.filter((event) => {
+    const date = new Date(`${event.date}T00:00:00`);
+    return !Number.isNaN(date.getTime()) && isSameMonth(date, viewDate);
+  });
+
+  const countsByMonth = Array.from({ length: 12 }, (_, month) => {
+    const count = sortedEvents.filter((event) => {
+      const date = new Date(`${event.date}T00:00:00`);
+      return (
+        !Number.isNaN(date.getTime()) &&
+        date.getFullYear() === viewDate.getFullYear() &&
+        date.getMonth() === month
+      );
+    }).length;
+
+    return {
+      month,
+      label: new Date(viewDate.getFullYear(), month, 1).toLocaleDateString("en-US", { month: "short" }),
+      count,
+    };
+  });
+
+  const upcoming = sortedEvents
+    .filter((event) => event.date >= today)
+    .slice(0, 5);
+
+  const addEvent = () => {
+    if (!form.title.trim() || !form.date) return;
+    setEvents((current) =>
+      sortSchedule([
+        ...current,
+        {
+          id: `sc${Date.now()}`,
+          title: form.title.trim(),
+          date: form.date,
+          time: form.time,
+          category: form.category,
+          notes: form.notes.trim(),
+        },
+      ])
+    );
+    setSelectedDate(form.date);
+    setShowAdd(false);
+    setForm((current) => ({ ...current, title: "", time: "", notes: "" }));
+  };
+
+  const removeEvent = (id) => setEvents((current) => current.filter((event) => event.id !== id));
+
+  const panelStyle = {
+    background: C.card,
+    border: `1px solid ${C.border}`,
+    borderRadius: 18,
+    padding: wide ? "20px" : "18px",
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <div
+        style={{
+          ...panelStyle,
+          display: "grid",
+          gridTemplateColumns: wide ? "minmax(0, 1.5fr) minmax(300px, 0.9fr)" : "1fr",
+          gap: 18,
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+            <div>
+              <span style={sec}>schedule</span>
+              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: wide ? 34 : 28, color: C.text, lineHeight: 1 }}>
+                {fmtMonthYear(viewDate)}
+              </div>
+              <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textDim, margin: "10px 0 0" }}>
+                {monthEvents.length} event{monthEvents.length === 1 ? "" : "s"} planned this month
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} style={ghst}>prev</button>
+              <button onClick={() => { const now = new Date(); setSelectedDate(toDateInputValue(now)); setViewDate(new Date(now.getFullYear(), now.getMonth(), 1)); }} style={ghst}>today</button>
+              <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))} style={ghst}>next</button>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 8, marginBottom: 10 }}>
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
+              <div key={label} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textDim, textAlign: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                {label}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 8 }}>
+            {days.map(({ day, key, dayEvents }) => {
+              const inMonth = day.getMonth() === viewDate.getMonth();
+              const isSelected = key === selectedDate;
+              const isToday = key === today;
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setSelectedDate(key);
+                    setForm((current) => ({ ...current, date: key }));
+                  }}
+                  style={{
+                    minHeight: wide ? 108 : 86,
+                    borderRadius: 16,
+                    border: `1px solid ${isSelected ? C.accent : isToday ? C.gold : C.border}`,
+                    background: isSelected ? `${C.accent}16` : C.surface,
+                    color: inMonth ? C.text : C.textDim,
+                    padding: "10px 8px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13 }}>{day.getDate()}</span>
+                    {dayEvents.length > 0 && (
+                      <span style={{ minWidth: 20, height: 20, borderRadius: 999, background: `${C.teal}1f`, color: C.teal, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>
+                        {dayEvents.length}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gap: 5 }}>
+                    {dayEvents.slice(0, wide ? 3 : 2).map((event) => (
+                      <div key={event.id} style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textMid, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {event.time ? `${event.time} · ` : ""}{event.title}
+                      </div>
+                    ))}
+                    {dayEvents.length > (wide ? 3 : 2) && (
+                      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textDim }}>
+                        +{dayEvents.length - (wide ? 3 : 2)} more
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gap: 16, alignContent: "start" }}>
+          <div style={{ ...panelStyle, padding: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div>
+                <span style={lbl}>selected day</span>
+                <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 24, color: C.text }}>
+                  {fmtWeekday(selectedDate)}
+                </div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textDim }}>
+                  {fmtShort(selectedDate)}
+                </div>
+              </div>
+              <button onClick={() => { setShowAdd((current) => !current); setForm((current) => ({ ...current, date: selectedDate })); }} style={{ ...btn, padding: "10px 14px" }}>
+                {showAdd ? "close" : "add event"}
+              </button>
+            </div>
+
+            {showAdd && (
+              <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+                <input
+                  value={form.title}
+                  onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="event title"
+                  style={inp}
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 112px", gap: 10 }}>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
+                    style={inp}
+                  />
+                  <input
+                    type="time"
+                    value={form.time}
+                    onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
+                    style={inp}
+                  />
+                </div>
+                <select
+                  value={form.category}
+                  onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+                  style={inp}
+                >
+                  <option value="personal">personal</option>
+                  <option value="work">work</option>
+                  <option value="health">health</option>
+                  <option value="finance">finance</option>
+                </select>
+                <textarea
+                  value={form.notes}
+                  onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="notes"
+                  rows={3}
+                  style={{ ...inp, resize: "vertical" }}
+                />
+                <button onClick={addEvent} style={btn}>save event</button>
+              </div>
+            )}
+
+            <div style={{ display: "grid", gap: 10 }}>
+              {selectedEvents.length === 0 && (
+                <p style={{ fontFamily: "'Cormorant Garamond',serif", fontStyle: "italic", fontSize: 15, color: C.textDim, margin: 0 }}>
+                  nothing scheduled for this day yet
+                </p>
+              )}
+              {selectedEvents.map((event) => (
+                <div key={event.id} style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: "12px 14px", background: C.surface }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 14, color: C.text }}>{event.title}</div>
+                      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>
+                        {event.category}{event.time ? ` · ${event.time}` : ""}
+                      </div>
+                    </div>
+                    <button onClick={() => removeEvent(event.id)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 12, padding: 0 }}>
+                      remove
+                    </button>
+                  </div>
+                  {event.notes && (
+                    <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 15, color: C.textMid, lineHeight: 1.6, margin: "10px 0 0", whiteSpace: "pre-wrap" }}>
+                      {event.notes}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ ...panelStyle, padding: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={lbl}>year view</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={() => setViewDate(new Date(viewDate.getFullYear() - 1, viewDate.getMonth(), 1))} style={ghst}>-1y</button>
+                <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 26, color: C.text }}>{viewDate.getFullYear()}</div>
+                <button onClick={() => setViewDate(new Date(viewDate.getFullYear() + 1, viewDate.getMonth(), 1))} style={ghst}>+1y</button>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+              {countsByMonth.map((month) => {
+                const active = month.month === viewDate.getMonth();
+                return (
+                  <button
+                    key={month.month}
+                    onClick={() => setViewDate(new Date(viewDate.getFullYear(), month.month, 1))}
+                    style={{
+                      background: active ? `${C.gold}16` : C.surface,
+                      border: `1px solid ${active ? C.gold : C.border}`,
+                      borderRadius: 14,
+                      padding: "10px 8px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: active ? C.gold : C.text }}>{month.label}</div>
+                    <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 10, color: C.textDim, marginTop: 4 }}>{month.count} planned</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ ...panelStyle, padding: "16px" }}>
+            <span style={lbl}>up next</span>
+            <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
+              {upcoming.length === 0 && (
+                <p style={{ fontFamily: "'Cormorant Garamond',serif", fontStyle: "italic", fontSize: 15, color: C.textDim, margin: 0 }}>
+                  your future calendar is open
+                </p>
+              )}
+              {upcoming.map((event) => (
+                <button
+                  key={event.id}
+                  onClick={() => setSelectedDate(event.date)}
+                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "12px 14px", textAlign: "left", cursor: "pointer" }}
+                >
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.text }}>{event.title}</div>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 11, color: C.textDim, marginTop: 4 }}>
+                    {fmtWeekday(event.date)}, {fmtShort(event.date)}{event.time ? ` · ${event.time}` : ""}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────
 const TABS = [
   {id:"breathe", icon:"❄", label:"breathe" },
   {id:"today",   icon:"◎", label:"today"   },
   {id:"focus",   icon:"⊙", label:"focus"   },
+  {id:"schedule",icon:"☷", label:"schedule" },
   {id:"journal", icon:"✦", label:"gratitude" },
   {id:"grocery", icon:"◻", label:"grocery" },
   {id:"recipes", icon:"✿", label:"recipes" },
@@ -838,7 +1194,7 @@ function LoginScreen({ onAuth }) {
 
   return (
     <div style={{ minHeight:'100vh', background:'#0D0A06', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
-      <div style={{ width:'100%', maxWidth:360 }}>
+      <div style={{ width:'100%', maxWidth:430, background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, padding:'32px 28px', boxShadow:'0 28px 80px rgba(0,0,0,0.32)' }}>
         <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:'#EDE6D0', textAlign:'center', marginBottom:8 }}>your day</div>
         <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:'#5A5040', textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>your data, everywhere you are</div>
         <div style={{ display:'flex', gap:8, marginBottom:24 }}>
@@ -864,6 +1220,9 @@ function LoginScreen({ onAuth }) {
 }
 
 export default function App() {
+  const viewportWidth = useViewportWidth();
+  const isDesktop = viewportWidth >= 1080;
+  const isWideContent = viewportWidth >= 1280;
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('email'));
   const [tab,setTab]               = useState(() => localStorage.getItem('tab') || "today");
@@ -875,13 +1234,10 @@ export default function App() {
   const [recipes,setRecipes]       = useState([]);
   const [journal,setJournal]       = useState([]);
   const [goals,setGoals]           = useState([]);
+  const [schedule,setSchedule]     = useState([]);
   const [cycleData,setCycleData]   = useState({lastPeriod:"",cycleLength:28,periodLength:5});
   const [loaded,setLoaded]         = useState(false);
   const tk = todayKey();
-  const saveToServer = async (data) => {
-  if (!token) return;
-  await api.save(token, data);
-};
 
   useEffect(()=>{
     const l=document.createElement("link");
@@ -910,6 +1266,7 @@ export default function App() {
     if (remote.recipes) setRecipes(remote.recipes);
     if (remote.journal) setJournal(remote.journal);
     if (remote.goals) setGoals(remote.goals);
+    if (remote.schedule) setSchedule(sortSchedule(remote.schedule));
     if (remote.cycle) setCycleData(remote.cycle);
     setLoaded(true);
   })();
@@ -918,60 +1275,102 @@ export default function App() {
   useEffect(() => {
   if (!loaded || !token) return;
   const tk = todayKey();
-  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, recipes, journal, goals, cycle: cycleData };
+  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, recipes, journal, goals, schedule, cycle: cycleData };
   api.save(token, data);
-}, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, goals, cycleData, loaded]);
+}, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, goals, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
 
   if (!token) return <LoginScreen onAuth={(t, e) => { setToken(t); setUserEmail(e); }} />;
   return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",justifyContent:"center",fontFamily:"'Outfit',sans-serif"}}>
-      <div style={{width:"100%",maxWidth:480,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",justifyContent:"center",fontFamily:"'Outfit',sans-serif",padding:isDesktop ? "24px" : 0}}>
+      <div style={{width:"100%",maxWidth:isDesktop ? 1380 : 520,display:isDesktop ? "grid" : "flex",gridTemplateColumns:isDesktop ? "280px minmax(0, 1fr)" : undefined,gap:isDesktop ? 24 : 0,minHeight:"100vh"}}>
 
-        {/* HEADER */}
-        <div style={{padding:"28px 24px 16px",borderBottom:`1px solid ${C.border}`,background:C.surface}}>
-          <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>{fmtFull()}</div>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:30,fontWeight:300,color:C.text,lineHeight:1.1}}>your day</div>
-          {cycleInfo&&(
-            <div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:10,background:`${PHASES[cycleInfo.phase].color}18`,border:`1px solid ${PHASES[cycleInfo.phase].color}25`,borderRadius:20,padding:"4px 12px"}}>
-              <span style={{fontSize:11}}>{PHASES[cycleInfo.phase].moon}</span>
-              <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:PHASES[cycleInfo.phase].color,letterSpacing:"0.06em"}}>{PHASES[cycleInfo.phase].label} · day {cycleInfo.dayInCycle}</span>
+        <aside style={{background:C.surface,border:isDesktop ? `1px solid ${C.border}` : "none",borderRadius:isDesktop ? 28 : 0,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:isDesktop ? "calc(100vh - 48px)" : "auto",position:isDesktop ? "sticky" : "relative",top:isDesktop ? 24 : 0,alignSelf:isDesktop ? "start" : "stretch"}}>
+          <div style={{padding:isDesktop ? "30px 24px 22px" : "28px 24px 16px",borderBottom:`1px solid ${C.border}`}}>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>{fmtFull()}</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:isDesktop ? 36 : 30,fontWeight:300,color:C.text,lineHeight:1.1}}>your day</div>
+            <p style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,lineHeight:1.6,margin:"10px 0 0"}}>
+              A single place for anchors, work, reflection, and long-range planning.
+            </p>
+            {cycleInfo&&(
+              <div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:14,background:`${PHASES[cycleInfo.phase].color}18`,border:`1px solid ${PHASES[cycleInfo.phase].color}25`,borderRadius:20,padding:"4px 12px"}}>
+                <span style={{fontSize:11}}>{PHASES[cycleInfo.phase].moon}</span>
+                <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:PHASES[cycleInfo.phase].color,letterSpacing:"0.06em"}}>{PHASES[cycleInfo.phase].label} · day {cycleInfo.dayInCycle}</span>
+              </div>
+            )}
+          </div>
+
+          <div style={{background:C.surface,borderBottom:isDesktop ? "none" : `1px solid ${C.border}`,display:"flex",flexDirection:isDesktop ? "column" : "row",overflowX:isDesktop ? "visible" : "auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",padding:isDesktop ? 12 : 0}}>
+            {TABS.map(t=>{
+              const active=tab===t.id;
+              return (
+                <button key={t.id} onClick={()=>setTab(t.id)} style={{
+                  background:active && isDesktop ? `${C.accent}14` : "none",
+                  border:"none",
+                  borderBottom:!isDesktop && active ? `2px solid ${C.accent}` : !isDesktop ? "2px solid transparent" : "none",
+                  borderRadius:isDesktop ? 16 : 0,
+                  padding:isDesktop ? "14px 16px" : "11px 12px 9px",
+                  cursor:"pointer",
+                  display:"flex",
+                  flexDirection:isDesktop ? "row" : "column",
+                  alignItems:"center",
+                  gap:isDesktop ? 10 : 3,
+                  flexShrink:0,
+                  minWidth:isDesktop ? "100%" : 54,
+                  textAlign:isDesktop ? "left" : "center"
+                }}>
+                  <span style={{fontSize:12,color:active?C.accent:C.textDim}}>{t.icon}</span>
+                  <span style={{fontFamily:"'Outfit',sans-serif",fontSize:isDesktop ? 11 : 9,letterSpacing:"0.07em",color:active?C.accent:C.textDim,textTransform:"uppercase",whiteSpace:"nowrap"}}>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{marginTop:"auto",padding:"14px 20px 18px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+              <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{userEmail}</p>
+              <button onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('email'); setToken(null); }} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
             </div>
-          )}
-        </div>
+          </div>
+        </aside>
 
-        {/* TAB BAR */}
-        <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,display:"flex",overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",position:"sticky",top:0,zIndex:10}}>
-          {TABS.map(t=>{
-            const active=tab===t.id;
-            return (
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"none",border:"none",padding:"11px 12px 9px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,flexShrink:0,borderBottom:active?`2px solid ${C.accent}`:"2px solid transparent",minWidth:54}}>
-                <span style={{fontSize:12,color:active?C.accent:C.textDim}}>{t.icon}</span>
-                <span style={{fontFamily:"'Outfit',sans-serif",fontSize:9,letterSpacing:"0.07em",color:active?C.accent:C.textDim,textTransform:"uppercase",whiteSpace:"nowrap"}}>{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        <main style={{display:"flex",flexDirection:"column",minWidth:0}}>
+          <div style={{background:C.surface,border:isDesktop ? `1px solid ${C.border}` : "none",borderRadius:isDesktop ? 28 : 0,display:"flex",flexDirection:"column",minHeight:isDesktop ? "calc(100vh - 48px)" : "auto",overflow:"hidden"}}>
+            <div style={{padding:isDesktop ? "30px 30px 18px" : "22px 18px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,flexWrap:"wrap"}}>
+                <div>
+                  <span style={sec}>dashboard</span>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isDesktop ? 38 : 30,color:C.text,lineHeight:1}}>
+                    {TABS.find((item) => item.id === tab)?.label || "today"}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"12px 14px",minWidth:130}}>
+                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>anchors</div>
+                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:22,color:C.text,marginTop:6}}>{anchorDone.length}/{anchors.length}</div>
+                  </div>
+                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"12px 14px",minWidth:130}}>
+                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>upcoming</div>
+                    <div style={{fontFamily:"'Outfit',sans-serif",fontSize:22,color:C.text,marginTop:6}}>{schedule.filter((item) => item.date >= tk).length}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        {/* CONTENT */}
-        <div style={{flex:1,padding:"22px 18px 40px",overflowY:"auto"}}>
-          {tab==="today"   && <TodayTab   habits={anchors}   doneIds={anchorDone} setDoneIds={setAnchorDone} setHabits={setAnchors}/>}
-          {tab==="breathe" && <WimHofTab/>}
-          {tab==="focus"   && <FocusTab   tasks={focusTasks} doneIds={focusDone}  setDoneIds={setFocusDone}  setTasks={setFocusTasks}/>}
-          {tab==="grocery" && <GroceryTab items={grocery}    setItems={setGrocery}/>}
-          {tab==="recipes" && <RecipesTab recipes={recipes}  setRecipes={setRecipes}/>}
-          {tab==="journal" && <JournalTab entries={journal}  setEntries={setJournal}/>}
-          {tab==="goals"   && <GoalsTab   goals={goals}      setGoals={setGoals}/>}
-          {tab==="cycle"   && <CycleTab   cycleData={cycleData} setCycleData={setCycleData} info={cycleInfo}/>}
-        </div>
-
-        <div style={{padding:"10px 20px 16px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-  <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:11, color:'#5A5040', margin:0 }}>{userEmail}</p>
-  <button onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('email'); setToken(null); }} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer' }}>log out</button>
-</div>
-        </div>
+            <div style={{flex:1,padding:isDesktop ? "28px 30px 34px" : "22px 18px 40px",overflowY:"auto"}}>
+              {tab==="today"    && <TodayTab habits={anchors} doneIds={anchorDone} setDoneIds={setAnchorDone} setHabits={setAnchors}/>}
+              {tab==="breathe"  && <WimHofTab/>}
+              {tab==="focus"    && <FocusTab tasks={focusTasks} doneIds={focusDone} setDoneIds={setFocusDone} setTasks={setFocusTasks}/>}
+              {tab==="schedule" && <ScheduleTab events={schedule} setEvents={setSchedule} wide={isWideContent}/>}
+              {tab==="grocery"  && <GroceryTab items={grocery} setItems={setGrocery}/>}
+              {tab==="recipes"  && <RecipesTab recipes={recipes} setRecipes={setRecipes}/>}
+              {tab==="journal"  && <JournalTab entries={journal} setEntries={setJournal}/>}
+              {tab==="goals"    && <GoalsTab goals={goals} setGoals={setGoals}/>}
+              {tab==="cycle"    && <CycleTab cycleData={cycleData} setCycleData={setCycleData} info={cycleInfo}/>}
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
