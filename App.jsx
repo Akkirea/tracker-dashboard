@@ -684,7 +684,14 @@ function CycleTab({cycleData,setCycleData,info}) {
   const save=()=>{setCycleData(form);setEditing(false);};
   if(editing||!info) return (
     <div>
-      <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:16,color:C.textMid,marginBottom:24}}>{!cycleData.lastPeriod?"let's set up your cycle":"update your cycle"}</p>
+      <div style={{background:`linear-gradient(135deg,${C.blush}12,${C.card})`,border:`1px solid ${C.border}`,borderRadius:18,padding:"22px 18px",marginBottom:20,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:"50%",right:18,transform:"translateY(-50%)",width:78,height:78,borderRadius:20,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(220,228,240,0.18)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(2px)"}}>
+          <div style={{position:"relative",width:58,height:58,borderRadius:"50%",background:"radial-gradient(circle at 32% 30%, rgba(255,255,255,1), rgba(237,241,247,0.98) 35%, rgba(203,211,224,0.88) 68%, rgba(203,211,224,0.72) 100%)",boxShadow:"0 0 26px rgba(226, 232, 244, 0.38), inset 0 0 12px rgba(255,255,255,0.28)"}}>
+            <div style={{position:"absolute",top:3,left:19,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.blush}20,${C.card})`}} />
+          </div>
+        </div>
+        <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:16,color:C.textMid,marginBottom:0,paddingRight:96,minHeight:34,display:"flex",alignItems:"center"}}>{!cycleData.lastPeriod?"let's set up your cycle":"update your cycle"}</p>
+      </div>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
         <div><label style={lbl}>first day of last period</label><input type="date" value={form.lastPeriod} onChange={e=>setForm(f=>({...f,lastPeriod:e.target.value}))} style={inp}/></div>
         <div><label style={lbl}>cycle length (days)</label><input type="number" min="21" max="45" value={form.cycleLength} onChange={e=>setForm(f=>({...f,cycleLength:parseInt(e.target.value)||28}))} style={inp}/></div>
@@ -696,7 +703,12 @@ function CycleTab({cycleData,setCycleData,info}) {
   const ph=PHASES[info.phase], pct=(info.dayInCycle/info.cycleLen)*100;
   return (
     <div>
-      <div style={{background:`linear-gradient(135deg,${ph.color}1A,${C.card})`,border:`1px solid ${ph.color}35`,borderRadius:18,padding:"26px 22px",marginBottom:18,textAlign:"center"}}>
+      <div style={{background:`linear-gradient(135deg,${ph.color}1A,${C.card})`,border:`1px solid ${ph.color}35`,borderRadius:18,padding:"26px 22px",marginBottom:18,textAlign:"center",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:18,right:18,width:78,height:78,borderRadius:20,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(220,228,240,0.18)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(2px)"}}>
+          <div style={{position:"relative",width:58,height:58,borderRadius:"50%",background:"radial-gradient(circle at 32% 30%, rgba(255,255,255,1), rgba(237,241,247,0.98) 35%, rgba(203,211,224,0.88) 68%, rgba(203,211,224,0.72) 100%)",boxShadow:"0 0 26px rgba(226, 232, 244, 0.38), inset 0 0 12px rgba(255,255,255,0.28)"}}>
+            <div style={{position:"absolute",top:3,left:19,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${ph.color}20,${C.card})`}} />
+          </div>
+        </div>
         <div style={{fontSize:42,marginBottom:6}}>{ph.moon}</div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:300,color:ph.color,letterSpacing:"0.05em",marginBottom:4}}>{ph.label}</div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textMid,letterSpacing:"0.1em",marginBottom:16}}>{ph.tagline}</div>
@@ -791,7 +803,7 @@ function LoginScreen({ onAuth }) {
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem('email'));
-  const [tab,setTab]               = useState("today");
+  const [tab,setTab]               = useState(() => localStorage.getItem('tab') || "today");
   const [anchors,setAnchors]       = useState(DEFAULT_ANCHORS);
   const [anchorDone,setAnchorDone] = useState([]);
   const [focusTasks,setFocusTasks] = useState(DEFAULT_FOCUS);
@@ -816,6 +828,10 @@ export default function App() {
     document.body.style.margin="0";
     document.body.style.background=C.bg;
   },[]);
+
+  useEffect(() => {
+    localStorage.setItem('tab', tab);
+  }, [tab]);
 
   useEffect(() => {
   if (!token) return;
