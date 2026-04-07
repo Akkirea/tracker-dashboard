@@ -1284,7 +1284,7 @@ export default function App() {
   if (!token) return <LoginScreen onAuth={(t, e) => { setToken(t); setUserEmail(e); }} />;
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",justifyContent:"center",fontFamily:"'Outfit',sans-serif",padding:isDesktop ? "24px" : 0}}>
-      <div style={{width:"100%",maxWidth:isDesktop ? 1380 : 520,display:isDesktop ? "grid" : "flex",gridTemplateColumns:isDesktop ? "280px minmax(0, 1fr)" : undefined,gap:isDesktop ? 24 : 0,minHeight:"100vh"}}>
+      <div style={{width:"100%",maxWidth:isDesktop ? 1380 : 520,display:isDesktop ? "grid" : "flex",flexDirection:isDesktop ? undefined : "column",gridTemplateColumns:isDesktop ? "280px minmax(0, 1fr)" : undefined,gap:isDesktop ? 24 : 0,minHeight:"100vh"}}>
 
         <aside style={{background:C.surface,border:isDesktop ? `1px solid ${C.border}` : "none",borderRadius:isDesktop ? 28 : 0,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:isDesktop ? "calc(100vh - 48px)" : "auto",position:isDesktop ? "sticky" : "relative",top:isDesktop ? 24 : 0,alignSelf:isDesktop ? "start" : "stretch"}}>
           <div style={{padding:isDesktop ? "30px 24px 22px" : "28px 24px 16px",borderBottom:`1px solid ${C.border}`}}>
