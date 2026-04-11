@@ -3,10 +3,24 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const API = 'https://your-day.up.railway.app';
 
 // ── PALETTE ───────────────────────────────────────────────────────────────
-const C = {
+const DARK_THEME = {
   bg:"#0D0A06", surface:"#141009", card:"#1B1510",
   border:"#272018", borderMid:"#342C1E",
   text:"#EDE6D0", textMid:"#9A8E75", textDim:"#5A5040",
+};
+const LIGHT_THEME = {
+  bg:"#F5F0E8", surface:"#FDFAF5", card:"#EDE8DF",
+  border:"#DDD5C5", borderMid:"#C5BAA5",
+  text:"#2A2218", textMid:"#5A4F3A", textDim:"#9A8E75",
+};
+if (typeof document !== "undefined") {
+  const _r = document.documentElement;
+  Object.entries(DARK_THEME).forEach(([k,v]) => _r.style.setProperty(`--${k}`,v));
+}
+const C = {
+  bg:"var(--bg)", surface:"var(--surface)", card:"var(--card)",
+  border:"var(--border)", borderMid:"var(--borderMid)",
+  text:"var(--text)", textMid:"var(--textMid)", textDim:"var(--textDim)",
   accent:"#C4694A", gold:"#C9A84C", sage:"#7A9E7E",
   blush:"#C47A8A", teal:"#5A9E9A", ice:"#7AB8C4",
 };
@@ -622,12 +636,13 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
 }
 
 // ── GROCERY ───────────────────────────────────────────────────────────────
-function GroceryRow({item,onToggle,onRemove,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd,onMoveUp,onMoveDown}) {
+function GroceryRow({item,onToggle,onRemove,alwaysShowDelete=false,draggable=false,onDragStart,onDragOver,onDrop,onDragEnd,onMoveUp,onMoveDown}) {
   const [hov,setHov]=useState(false);
+  const showDelete = alwaysShowDelete || hov;
   return (
     <div onClick={onToggle} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       draggable={draggable} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop} onDragEnd={onDragEnd}
-      style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:item.done?"#1C1B12":C.card,border:`1px solid ${item.done?"#2C2A18":C.border}`,borderRadius:12,cursor:"pointer",marginBottom:8}}>
+      style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:item.done?`${C.gold}08`:C.card,border:`1px solid ${item.done?C.borderMid:C.border}`,borderRadius:12,cursor:"pointer",marginBottom:8}}>
       <Ring done={item.done} color={C.gold} size={24}/>
       <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:item.done?C.textDim:C.text,textDecoration:item.done?"line-through":"none"}}>{item.name}</span>
       {item.qty&&<span style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,flexShrink:0}}>{item.qty}</span>}
@@ -638,7 +653,7 @@ function GroceryRow({item,onToggle,onRemove,draggable=false,onDragStart,onDragOv
         </div>
       )}
       {draggable && !onMoveUp && !onMoveDown && <span onClick={e=>e.stopPropagation()} style={{color:C.textDim,fontSize:14,cursor:"grab"}}>⋮⋮</span>}
-      {hov&&<button onClick={e=>{e.stopPropagation();onRemove();}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
+      {showDelete&&<button onClick={e=>{e.stopPropagation();onRemove();}} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13}}>✕</button>}
     </div>
   );
 }
@@ -680,7 +695,7 @@ function GroceryTab({items,setItems}) {
       ):(
         <button onClick={()=>setShowAdd(true)} style={dash}>+ add item</button>
       )}
-      {done.length>0&&<div style={{marginTop:24,opacity:0.55}}><span style={sec}>in the cart</span>{done.map(i=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)}/>)}</div>}
+      {done.length>0&&<div style={{marginTop:24}}><span style={sec}>in the cart</span>{done.map(i=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)} alwaysShowDelete={true}/>)}</div>}
       {items.length===0&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>your grocery list is empty</p>}
     </div>
   );
@@ -1027,17 +1042,12 @@ function CycleTab({cycleData,setCycleData,info}) {
   const save=()=>{setCycleData(form);setEditing(false);};
   if(editing||!info) return (
     <div>
-      <div style={{background:`linear-gradient(135deg,${C.blush}12,${C.card})`,border:`1px solid ${C.border}`,borderRadius:18,padding:"22px 18px",marginBottom:20,position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:"50%",right:18,transform:"translateY(-50%)",width:78,height:78,borderRadius:20,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(220,228,240,0.18)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(2px)"}}>
-          <div style={{position:"relative",width:58,height:58,borderRadius:"50%",background:"radial-gradient(circle at 32% 30%, rgba(255,255,255,1), rgba(237,241,247,0.98) 35%, rgba(203,211,224,0.88) 68%, rgba(203,211,224,0.72) 100%)",boxShadow:"0 0 26px rgba(226, 232, 244, 0.38), inset 0 0 12px rgba(255,255,255,0.28)"}}>
-            <div style={{position:"absolute",top:3,left:19,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.blush}20,${C.card})`}} />
-          </div>
-        </div>
-        <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:16,color:C.textMid,marginBottom:0,paddingRight:96,minHeight:34,display:"flex",alignItems:"center"}}>{!cycleData.lastPeriod?"let's set up your cycle":"update your cycle"}</p>
+      <div style={{background:`linear-gradient(135deg,${C.blush}12,${C.card})`,border:`1px solid ${C.border}`,borderRadius:18,padding:"22px 18px",marginBottom:20}}>
+        <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:16,color:C.textMid,marginBottom:0}}>{!cycleData.lastPeriod?"let's set up your cycle":"update your cycle"}</p>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
         <div><label style={lbl}>first day of last period</label><input type="date" value={form.lastPeriod} onChange={e=>setForm(f=>({...f,lastPeriod:e.target.value}))} style={inp}/></div>
-        <div><label style={lbl}>cycle length (days)</label><input type="number" min="21" max="45" value={form.cycleLength} onChange={e=>setForm(f=>({...f,cycleLength:parseInt(e.target.value)||28}))} style={inp}/></div>
+        <div><label style={lbl}>cycle length (days)</label><input type="number" min="21" max="90" value={form.cycleLength} onChange={e=>setForm(f=>({...f,cycleLength:parseInt(e.target.value)||28}))} style={inp}/></div>
         <div><label style={lbl}>period length (days)</label><input type="number" min="2" max="10" value={form.periodLength} onChange={e=>setForm(f=>({...f,periodLength:parseInt(e.target.value)||5}))} style={inp}/></div>
         <button onClick={save} style={btn}>save</button>
       </div>
@@ -1046,12 +1056,7 @@ function CycleTab({cycleData,setCycleData,info}) {
   const ph=PHASES[info.phase], pct=(info.dayInCycle/info.cycleLen)*100;
   return (
     <div>
-      <div style={{background:`linear-gradient(135deg,${ph.color}1A,${C.card})`,border:`1px solid ${ph.color}35`,borderRadius:18,padding:"26px 22px",marginBottom:18,textAlign:"center",position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:18,right:18,width:78,height:78,borderRadius:20,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(220,228,240,0.18)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(2px)"}}>
-          <div style={{position:"relative",width:58,height:58,borderRadius:"50%",background:"radial-gradient(circle at 32% 30%, rgba(255,255,255,1), rgba(237,241,247,0.98) 35%, rgba(203,211,224,0.88) 68%, rgba(203,211,224,0.72) 100%)",boxShadow:"0 0 26px rgba(226, 232, 244, 0.38), inset 0 0 12px rgba(255,255,255,0.28)"}}>
-            <div style={{position:"absolute",top:3,left:19,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${ph.color}20,${C.card})`}} />
-          </div>
-        </div>
+      <div style={{background:`linear-gradient(135deg,${ph.color}1A,${C.card})`,border:`1px solid ${ph.color}35`,borderRadius:18,padding:"26px 22px",marginBottom:18,textAlign:"center"}}>
         <div style={{fontSize:42,marginBottom:6}}>{ph.moon}</div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:300,color:ph.color,letterSpacing:"0.05em",marginBottom:4}}>{ph.label}</div>
         <div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textMid,letterSpacing:"0.1em",marginBottom:16}}>{ph.tagline}</div>
@@ -1415,6 +1420,88 @@ function ScheduleTab({ events, setEvents, wide = false }) {
   );
 }
 
+// ── READERS ───────────────────────────────────────────────────────────────
+function ReadersTab({ books, setBooks }) {
+  const [sub, setSub] = useState("reading");
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ title:"", author:"", notes:"", emoji:"📖" });
+  const BOOK_EMOJIS = ["📖","📚","📕","📗","📘","📙","🔖","📝","✨","🌿"];
+
+  const reading  = books.filter(b => b.status === "reading");
+  const readList = books.filter(b => b.status === "list");
+  const displayed = sub === "reading" ? reading : readList;
+
+  const add = () => {
+    if (!form.title.trim()) return;
+    setBooks(p => [...p, { id:`bk${Date.now()}`, ...form, title:form.title.trim(), author:form.author.trim(), status: sub === "reading" ? "reading" : "list" }]);
+    setForm({ title:"", author:"", notes:"", emoji:"📖" });
+    setShowAdd(false);
+  };
+  const remove = id => setBooks(p => p.filter(b => b.id !== id));
+  const moveTo  = (id, status) => setBooks(p => p.map(b => b.id === id ? {...b, status} : b));
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:8, marginBottom:22 }}>
+        {[{id:"reading",label:"reading"},{id:"list",label:"read list"}].map(s => (
+          <button key={s.id} onClick={() => { setSub(s.id); setShowAdd(false); }}
+            style={{ ...ghst, borderColor: sub===s.id ? C.accent : C.borderMid, color: sub===s.id ? C.accent : C.textDim, flex:1 }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {displayed.map(b => (
+        <div key={b.id} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px 16px", marginBottom:10 }}>
+          <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+            <span style={{ fontSize:22, flexShrink:0 }}>{b.emoji}</span>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:14, color:C.text, fontWeight:500 }}>{b.title}</div>
+              {b.author && <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.textDim, marginTop:2 }}>{b.author}</div>}
+              {b.notes && <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:15, color:C.textMid, lineHeight:1.6, margin:"8px 0 0", whiteSpace:"pre-wrap" }}>{b.notes}</p>}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0, alignItems:"flex-end" }}>
+              {sub === "reading" && (
+                <button onClick={() => moveTo(b.id,"list")} style={{ ...ghst, padding:"4px 10px", fontSize:11 }}>→ list</button>
+              )}
+              {sub === "list" && (
+                <button onClick={() => moveTo(b.id,"reading")} style={{ ...ghst, padding:"4px 10px", fontSize:11 }}>→ reading</button>
+              )}
+              <button onClick={() => remove(b.id)} style={{ background:"none", border:"none", color:C.textDim, cursor:"pointer", fontSize:12, padding:0 }}>remove</button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {showAdd ? (
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"18px", marginTop:4 }}>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
+            {BOOK_EMOJIS.map(e => (
+              <button key={e} onClick={() => setForm(f => ({...f,emoji:e}))}
+                style={{ background:form.emoji===e?`${C.sage}30`:"none", border:`1px solid ${form.emoji===e?C.sage:C.borderMid}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", fontSize:18 }}>{e}</button>
+            ))}
+          </div>
+          <input value={form.title} onChange={e => setForm(f=>({...f,title:e.target.value}))} placeholder="book title" style={{...inp, marginBottom:10}} autoFocus/>
+          <input value={form.author} onChange={e => setForm(f=>({...f,author:e.target.value}))} placeholder="author" style={{...inp, marginBottom:10}} onKeyDown={e=>e.key==="Enter"&&add()}/>
+          <textarea value={form.notes} onChange={e => setForm(f=>({...f,notes:e.target.value}))} placeholder="notes..." rows={3} style={{...inp,resize:"none",lineHeight:1.7,fontFamily:"'Cormorant Garamond',serif",fontSize:15}}/>
+          <div style={{ display:"flex", gap:8, marginTop:12 }}>
+            <button onClick={add} style={btn}>save</button>
+            <button onClick={() => setShowAdd(false)} style={ghst}>cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setShowAdd(true)} style={dash}>+ add book</button>
+      )}
+
+      {displayed.length === 0 && !showAdd && (
+        <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:"italic", fontSize:14, color:C.textDim, textAlign:"center", marginTop:20 }}>
+          {sub === "reading" ? "what are you reading right now?" : "books you want to read"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────
 function TabPanel({ active, children }) {
   return (
@@ -1433,6 +1520,7 @@ const TABS = [
   {id:"notes",   icon:"✎", label:"notes"   },
   {id:"grocery", icon:"◻", label:"grocery" },
   {id:"recipes", icon:"✿", label:"recipes" },
+  {id:"readers", icon:"◈", label:"readers" },
   {id:"goals",   icon:"△", label:"dreams"  },
   {id:"cycle",   icon:"◑", label:"cycle"   },
 ];
@@ -1456,22 +1544,22 @@ function LoginScreen({ onAuth }) {
   };
 
   return (
-    <div style={{ minHeight:'100vh', background:'#0D0A06', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
       <div style={{ width:'100%', maxWidth:430, background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, padding:'32px 28px', boxShadow:'0 28px 80px rgba(0,0,0,0.32)' }}>
-        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:'#EDE6D0', textAlign:'center', marginBottom:8 }}>Held</div>
-        <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:'#5A5040', textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>daily anchor app</div>
+        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:C.text, textAlign:'center', marginBottom:8 }}>Held</div>
+        <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.textDim, textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>daily anchor app</div>
         <div style={{ display:'flex', gap:8, marginBottom:24 }}>
           {['login','signup'].map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{ flex:1, padding:'10px', borderRadius:10, border:`1px solid ${mode===m ? '#C4694A' : '#342C1E'}`, background:'none', color: mode===m ? '#C4694A' : '#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:13, cursor:'pointer' }}>{m}</button>
+            <button key={m} onClick={() => setMode(m)} style={{ flex:1, padding:'10px', borderRadius:10, border:`1px solid ${mode===m ? C.accent : C.borderMid}`, background:'none', color: mode===m ? C.accent : C.textDim, fontFamily:"'Outfit',sans-serif", fontSize:13, cursor:'pointer' }}>{m}</button>
           ))}
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email" type="email"
-            style={{ width:'100%', background:'#1B1510', border:'1px solid #342C1E', borderRadius:10, padding:'12px 14px', color:'#EDE6D0', fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
+            style={{ width:'100%', background:C.card, border:`1px solid ${C.borderMid}`, borderRadius:10, padding:'12px 14px', color:C.text, fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
           <input value={password} onChange={e => setPassword(e.target.value)} placeholder="password" type="password"
             onKeyDown={e => e.key === 'Enter' && submit()}
-            style={{ width:'100%', background:'#1B1510', border:'1px solid #342C1E', borderRadius:10, padding:'12px 14px', color:'#EDE6D0', fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
-          {error && <p style={{ color:'#C47A8A', fontFamily:"'Outfit',sans-serif", fontSize:12, margin:0 }}>{error}</p>}
+            style={{ width:'100%', background:C.card, border:`1px solid ${C.borderMid}`, borderRadius:10, padding:'12px 14px', color:C.text, fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
+          {error && <p style={{ color:C.blush, fontFamily:"'Outfit',sans-serif", fontSize:12, margin:0 }}>{error}</p>}
           <button onClick={submit} disabled={loading}
             style={{ background:'#C4694A', border:'none', borderRadius:10, padding:'13px', color:'#fff', fontFamily:"'Outfit',sans-serif", fontSize:14, fontWeight:500, cursor:'pointer', marginTop:4 }}>
             {loading ? '...' : mode === 'login' ? 'log in' : 'create account'}
@@ -1484,7 +1572,7 @@ function LoginScreen({ onAuth }) {
 
 export default function App() {
   const viewportWidth = useViewportWidth();
-  const isDesktop = viewportWidth >= 1080;
+  const isDesktop = viewportWidth >= 768;
   const isWideContent = viewportWidth >= 1280;
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [userEmail, setUserEmail] = useState(() => {
@@ -1496,7 +1584,9 @@ export default function App() {
   const [anchorDone,setAnchorDone] = useState([]);
   const [focusTasks,setFocusTasks] = useState(DEFAULT_FOCUS);
   const [focusDone,setFocusDone]   = useState([]);
+  const [isDark, setIsDark]         = useState(true);
   const [grocery,setGrocery]       = useState([]);
+  const [books,setBooks]           = useState([]);
   const [recipes,setRecipes]       = useState([]);
   const [journal,setJournal]       = useState([]);
   const [notes,setNotes]           = useState([]);
@@ -1512,8 +1602,15 @@ export default function App() {
     l.href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Outfit:wght@300;400;500;600&display=swap";
     document.head.appendChild(l);
     document.body.style.margin="0";
-    document.body.style.background=C.bg;
+    document.body.style.background=DARK_THEME.bg;
   },[]);
+
+  useEffect(() => {
+    const theme = isDark ? DARK_THEME : LIGHT_THEME;
+    const r = document.documentElement;
+    Object.entries(theme).forEach(([k,v]) => r.style.setProperty(`--${k}`,v));
+    document.body.style.background = theme.bg;
+  }, [isDark]);
 
   useEffect(() => {
     localStorage.setItem('tab', tab);
@@ -1530,6 +1627,7 @@ export default function App() {
     if (remote.focusTasks) setFocusTasks(remote.focusTasks);
     setFocusDone(remote[`fdone-${tk}`] || []);
     if (remote.grocery) setGrocery(remote.grocery);
+    if (remote.books) setBooks(remote.books);
     if (remote.recipes) setRecipes(remote.recipes);
     if (remote.journal) setJournal(remote.journal);
     if (remote.notes) setNotes(remote.notes);
@@ -1553,9 +1651,9 @@ export default function App() {
   useEffect(() => {
   if (!loaded || !token) return;
   const tk = todayKey();
-  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, recipes, journal, notes, goals, schedule, cycle: cycleData };
+  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, books, recipes, journal, notes, goals, schedule, cycle: cycleData };
   api.save(token, data);
-}, [anchors, anchorDone, focusTasks, focusDone, grocery, recipes, journal, notes, goals, schedule, cycleData, loaded]);
+}, [anchors, anchorDone, focusTasks, focusDone, grocery, books, recipes, journal, notes, goals, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
   const logout = () => {
@@ -1566,8 +1664,8 @@ export default function App() {
 
   if (!token) return <LoginScreen onAuth={(t, e) => { setToken(t); setUserEmail(e); }} />;
   return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",justifyContent:"center",fontFamily:"'Outfit',sans-serif",padding:isDesktop ? "24px" : 0}}>
-      <div style={{width:"100%",maxWidth:isDesktop ? 1380 : 520,display:isDesktop ? "grid" : "flex",flexDirection:isDesktop ? undefined : "column",gridTemplateColumns:isDesktop ? "280px minmax(0, 1fr)" : undefined,gap:isDesktop ? 24 : 0,minHeight:"100vh"}}>
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",justifyContent:"center",fontFamily:"'Outfit',sans-serif",padding:isDesktop ? "24px" : 0,overflowX:"hidden"}}>
+      <div style={{width:"100%",maxWidth:isDesktop ? 1380 : "100%",display:isDesktop ? "grid" : "flex",flexDirection:isDesktop ? undefined : "column",gridTemplateColumns:isDesktop ? "260px minmax(0, 1fr)" : undefined,gap:isDesktop ? 24 : 0,minHeight:"100vh"}}>
 
         <aside style={{background:C.surface,border:isDesktop ? `1px solid ${C.border}` : "none",borderRadius:isDesktop ? 28 : 0,display:"flex",flexDirection:"column",overflow:"hidden",minHeight:isDesktop ? "calc(100vh - 48px)" : "auto",position:isDesktop ? "sticky" : "relative",top:isDesktop ? 24 : 0,alignSelf:isDesktop ? "start" : "stretch"}}>
           <div style={{padding:isDesktop ? "30px 24px 22px" : "28px 24px 16px",borderBottom:`1px solid ${C.border}`}}>
@@ -1600,7 +1698,7 @@ export default function App() {
                   alignItems:"center",
                   gap:isDesktop ? 10 : 3,
                   flexShrink:0,
-                  minWidth:isDesktop ? "100%" : 54,
+                  minWidth:isDesktop ? "100%" : 46,
                   textAlign:isDesktop ? "left" : "center"
                 }}>
                   <span style={{fontSize:12,color:active?C.accent:C.textDim}}>{t.icon}</span>
@@ -1613,8 +1711,9 @@ export default function App() {
           {isDesktop && (
             <div style={{marginTop:"auto",padding:"14px 20px 18px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
-                <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:'#5A5040', margin:0, overflow:"hidden", textOverflow:"ellipsis" }}>{typeof userEmail === "string" ? userEmail : ""}</p>
-                <button onClick={logout} style={{ background:'none', border:'none', color:'#5A5040', fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
+                <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:C.textDim, margin:0, overflow:"hidden", textOverflow:"ellipsis", flex:1, minWidth:0 }}>{typeof userEmail === "string" ? userEmail : ""}</p>
+                <button onClick={() => setIsDark(d => !d)} style={{ background:"none", border:`1px solid ${C.borderMid}`, borderRadius:8, color:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:12, cursor:"pointer", padding:"4px 8px", flexShrink:0 }}>{isDark ? "☀" : "◑"}</button>
+                <button onClick={logout} style={{ background:'none', border:'none', color:C.textDim, fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
               </div>
             </div>
           )}
@@ -1622,10 +1721,13 @@ export default function App() {
 
         <main style={{display:"flex",flexDirection:"column",minWidth:0}}>
           <div style={{background:C.surface,border:isDesktop ? `1px solid ${C.border}` : "none",borderRadius:isDesktop ? 28 : 0,display:"flex",flexDirection:"column",minHeight:isDesktop ? "calc(100vh - 48px)" : "auto",overflow:"hidden"}}>
-            <div style={{padding:isDesktop ? "30px 30px 18px" : "22px 18px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isDesktop ? 38 : 30,color:C.text,lineHeight:1}}>
+            <div style={{padding:isDesktop ? "30px 30px 18px" : "16px 18px 0",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isDesktop ? 38 : 28,color:C.text,lineHeight:1}}>
                 {TABS.find((item) => item.id === tab)?.label || "today"}
               </div>
+              {!isDesktop && (
+                <button onClick={() => setIsDark(d => !d)} style={{ background:"none", border:`1px solid ${C.borderMid}`, borderRadius:8, color:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:14, cursor:"pointer", padding:"5px 10px", flexShrink:0 }}>{isDark ? "☀" : "◑"}</button>
+              )}
             </div>
 
             <div style={{flex:1,padding:isDesktop ? "28px 30px 34px" : "22px 18px 40px",overflowY:"auto"}}>
@@ -1637,6 +1739,7 @@ export default function App() {
               <TabPanel active={tab==="notes"}><NotesTab notes={notes} setNotes={setNotes}/></TabPanel>
               <TabPanel active={tab==="grocery"}><GroceryTab items={grocery} setItems={setGrocery}/></TabPanel>
               <TabPanel active={tab==="recipes"}><RecipesTab recipes={recipes} setRecipes={setRecipes}/></TabPanel>
+              <TabPanel active={tab==="readers"}><ReadersTab books={books} setBooks={setBooks}/></TabPanel>
               <TabPanel active={tab==="goals"}><GoalsTab goals={goals} setGoals={setGoals}/></TabPanel>
               <TabPanel active={tab==="cycle"}><CycleTab cycleData={cycleData} setCycleData={setCycleData} info={cycleInfo}/></TabPanel>
             </div>
