@@ -1420,6 +1420,80 @@ function ScheduleTab({ events, setEvents, wide = false }) {
   );
 }
 
+// ── AFFIRMATIONS ──────────────────────────────────────────────────────────
+const FALLBACK_AFFIRMATIONS = [
+  "You are capable of achieving great things.",
+  "Every day is a new opportunity to grow.",
+  "You have the strength to overcome any challenge.",
+  "Your potential is limitless.",
+  "You are worthy of love and belonging.",
+  "Small steps forward still move you forward.",
+  "You are enough, exactly as you are.",
+  "Your hard work is paying off, even when you can't see it.",
+  "You have everything you need within you.",
+  "Today, I choose to be the best version of myself.",
+  "Progress, not perfection.",
+  "You are becoming who you are meant to be.",
+];
+
+function AffirmationsTab({ saved, setSaved }) {
+  const [affirmation, setAffirmation] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const fetchAffirmation = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("https://www.affirmations.dev/");
+      const data = await r.json();
+      setAffirmation(data.affirmation || "");
+    } catch {
+      setAffirmation(FALLBACK_AFFIRMATIONS[Math.floor(Math.random() * FALLBACK_AFFIRMATIONS.length)]);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchAffirmation(); }, [fetchAffirmation]);
+
+  const save = () => {
+    if (!affirmation || saved.includes(affirmation)) return;
+    setSaved(p => [affirmation, ...p]);
+  };
+  const removeSaved = text => setSaved(p => p.filter(a => a !== text));
+
+  return (
+    <div>
+      <div style={{background:`linear-gradient(135deg,${C.gold}12,${C.card})`,border:`1px solid ${C.gold}30`,borderRadius:18,padding:"32px 22px",marginBottom:22,textAlign:"center",minHeight:140,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        {loading ? (
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:18,color:C.textDim,margin:0}}>…</p>
+        ) : (
+          <>
+            <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:22,color:C.text,lineHeight:1.65,margin:"0 0 22px",maxWidth:460}}>{affirmation}</p>
+            <div style={{display:"flex",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
+              <button onClick={fetchAffirmation} style={btn}>new affirmation</button>
+              <button onClick={save} style={ghst}>save ✦</button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {saved.length > 0 && (
+        <>
+          <span style={sec}>saved</span>
+          {saved.map((text, i) => (
+            <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",marginBottom:10,display:"flex",gap:12,alignItems:"flex-start"}}>
+              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.textMid,lineHeight:1.65,margin:0,flex:1}}>{text}</p>
+              <button onClick={() => removeSaved(text)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
+            </div>
+          ))}
+        </>
+      )}
+      {saved.length === 0 && !loading && (
+        <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:16}}>save the ones that resonate</p>
+      )}
+    </div>
+  );
+}
+
 // ── READERS ───────────────────────────────────────────────────────────────
 function ReadersTab({ books, setBooks }) {
   const [sub, setSub] = useState("reading");
@@ -1587,6 +1661,8 @@ export default function App() {
   const [isDark, setIsDark]         = useState(true);
   const [grocery,setGrocery]       = useState([]);
   const [books,setBooks]           = useState([]);
+  const [savedAffirms,setSavedAffirms] = useState([]);
+  const [sidebarQuote, setSidebarQuote] = useState("");
   const [recipes,setRecipes]       = useState([]);
   const [journal,setJournal]       = useState([]);
   const [notes,setNotes]           = useState([]);
@@ -1603,6 +1679,26 @@ export default function App() {
     document.head.appendChild(l);
     document.body.style.margin="0";
     document.body.style.background=DARK_THEME.bg;
+    // fetch daily affirmation — renews once per day, cached in localStorage
+    const today = todayKey();
+    const cached = localStorage.getItem("affirm-quote");
+    const cachedDate = localStorage.getItem("affirm-date");
+    if (cached && cachedDate === today) {
+      setSidebarQuote(cached);
+    } else {
+      fetch("https://www.affirmations.dev/")
+        .then(r=>r.json())
+        .then(d=>{
+          const q = d.affirmation || FALLBACK_AFFIRMATIONS[Math.floor(Math.random()*FALLBACK_AFFIRMATIONS.length)];
+          localStorage.setItem("affirm-quote", q);
+          localStorage.setItem("affirm-date", today);
+          setSidebarQuote(q);
+        })
+        .catch(()=>{
+          const q = FALLBACK_AFFIRMATIONS[Math.floor(Math.random()*FALLBACK_AFFIRMATIONS.length)];
+          setSidebarQuote(q);
+        });
+    }
   },[]);
 
   useEffect(() => {
@@ -1628,6 +1724,7 @@ export default function App() {
     setFocusDone(remote[`fdone-${tk}`] || []);
     if (remote.grocery) setGrocery(remote.grocery);
     if (remote.books) setBooks(remote.books);
+    if (remote.savedAffirms) setSavedAffirms(remote.savedAffirms);
     if (remote.recipes) setRecipes(remote.recipes);
     if (remote.journal) setJournal(remote.journal);
     if (remote.notes) setNotes(remote.notes);
@@ -1651,9 +1748,9 @@ export default function App() {
   useEffect(() => {
   if (!loaded || !token) return;
   const tk = todayKey();
-  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, books, recipes, journal, notes, goals, schedule, cycle: cycleData };
+  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, schedule, cycle: cycleData };
   api.save(token, data);
-}, [anchors, anchorDone, focusTasks, focusDone, grocery, books, recipes, journal, notes, goals, schedule, cycleData, loaded]);
+}, [anchors, anchorDone, focusTasks, focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
   const logout = () => {
@@ -1674,11 +1771,10 @@ export default function App() {
             <p style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,lineHeight:1.6,margin:"10px 0 0"}}>
               A single place for anchors, work, reflection, and long-range planning.
             </p>
-            {cycleInfo&&(
-              <div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:14,background:`${PHASES[cycleInfo.phase].color}18`,border:`1px solid ${PHASES[cycleInfo.phase].color}25`,borderRadius:20,padding:"4px 12px"}}>
-                <span style={{fontSize:11}}>{PHASES[cycleInfo.phase].moon}</span>
-                <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:PHASES[cycleInfo.phase].color,letterSpacing:"0.06em"}}>{PHASES[cycleInfo.phase].label} · day {cycleInfo.dayInCycle}</span>
-              </div>
+            {sidebarQuote && (
+              <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textMid,lineHeight:1.65,margin:"14px 0 0",borderTop:`1px solid ${C.border}`,paddingTop:14}}>
+                {sidebarQuote}
+              </p>
             )}
           </div>
 
