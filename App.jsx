@@ -449,8 +449,9 @@ function WimHofTab() {
 
   return (
     <div>
-      {/* header card */}
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:"20px 18px",marginBottom:20}}>
+      {/* header card — tappable during hold to release */}
+      <div onClick={phase==="holdEmpty" && holdActive ? endHold : undefined}
+        style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:"20px 18px",marginBottom:20,cursor:phase==="holdEmpty"&&holdActive?"pointer":"default"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
           <span style={{fontSize:20}}>❄️</span>
           <div>
@@ -487,8 +488,7 @@ function WimHofTab() {
           {phase==="holdEmpty" && status==="running" && (
             <div style={{marginTop:8}}>
               <div style={{fontFamily:"'Outfit',sans-serif",fontSize:32,color:C.blush,fontWeight:300,marginBottom:6}}>{holdSecs}s</div>
-              <p style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,margin:"0 0 14px"}}>suggested: {HOLD_SUGGESTED}s — tap when ready</p>
-              <button onClick={endHold} style={{...btn,background:C.blush,fontSize:14,padding:"12px 32px"}}>release &amp; inhale</button>
+              <p style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,margin:0}}>tap anywhere to release</p>
             </div>
           )}
 
@@ -514,7 +514,7 @@ function WimHofTab() {
   audioRef.current.play();
   start();
 }} style={{...btn,background:C.ice,fontSize:14,padding:"13px 40px"}}>begin session</button>}
-        {status==="running" && phase!=="holdEmpty" && <button onClick={reset} style={{...ghst,fontSize:13}}>end session</button>}
+        {status==="running" && phase!=="holdEmpty" && phase!=="holdFull" && <button onClick={reset} style={{...ghst,fontSize:13}}>end session</button>}
         {status==="done" && (
           <>
             <button onClick={reset} style={{...btn,background:C.sage,padding:"12px 28px"}}>new session</button>
@@ -1515,25 +1515,39 @@ function ReadersTab({ books, setBooks }) {
   const [form, setForm] = useState({ title:"", author:"", notes:"", emoji:"📖" });
   const BOOK_EMOJIS = ["📖","📚","📕","📗","📘","📙","🔖","📝","✨","🌿"];
 
-  const reading  = books.filter(b => b.status === "reading");
-  const readList = books.filter(b => b.status === "list");
-  const displayed = sub === "reading" ? reading : readList;
+  const SUBS = [
+    { id:"reading",   label:"reading"   },
+    { id:"upnext",    label:"up next"   },
+    { id:"completed", label:"completed" },
+  ];
+
+  const displayed = books.filter(b => b.status === sub);
+
+  const statusAfter = { reading:"upnext", upnext:"reading", completed:"reading" };
 
   const add = () => {
     if (!form.title.trim()) return;
-    setBooks(p => [...p, { id:`bk${Date.now()}`, ...form, title:form.title.trim(), author:form.author.trim(), status: sub === "reading" ? "reading" : "list" }]);
+    setBooks(p => [...p, { id:`bk${Date.now()}`, ...form, title:form.title.trim(), author:form.author.trim(), status: sub }]);
     setForm({ title:"", author:"", notes:"", emoji:"📖" });
     setShowAdd(false);
   };
   const remove = id => setBooks(p => p.filter(b => b.id !== id));
   const moveTo  = (id, status) => setBooks(p => p.map(b => b.id === id ? {...b, status} : b));
 
+  const MOVE_LABELS = {
+    reading:   [{ to:"upnext",    label:"→ up next"   }, { to:"completed", label:"✓ done" }],
+    upnext:    [{ to:"reading",   label:"→ reading"   }, { to:"completed", label:"✓ done" }],
+    completed: [{ to:"reading",   label:"→ reading"   }],
+  };
+
+  const emptyMsg = { reading:"what are you reading right now?", upnext:"books you want to read next", completed:"your finished reads will live here" };
+
   return (
     <div>
-      <div style={{ display:"flex", gap:8, marginBottom:22 }}>
-        {[{id:"reading",label:"reading"},{id:"list",label:"read list"}].map(s => (
+      <div style={{ display:"flex", gap:6, marginBottom:22 }}>
+        {SUBS.map(s => (
           <button key={s.id} onClick={() => { setSub(s.id); setShowAdd(false); }}
-            style={{ ...ghst, borderColor: sub===s.id ? C.accent : C.borderMid, color: sub===s.id ? C.accent : C.textDim, flex:1 }}>
+            style={{ ...ghst, borderColor: sub===s.id ? C.accent : C.borderMid, color: sub===s.id ? C.accent : C.textDim, flex:1, padding:"9px 6px" }}>
             {s.label}
           </button>
         ))}
@@ -1549,12 +1563,9 @@ function ReadersTab({ books, setBooks }) {
               {b.notes && <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:15, color:C.textMid, lineHeight:1.6, margin:"8px 0 0", whiteSpace:"pre-wrap" }}>{b.notes}</p>}
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0, alignItems:"flex-end" }}>
-              {sub === "reading" && (
-                <button onClick={() => moveTo(b.id,"list")} style={{ ...ghst, padding:"4px 10px", fontSize:11 }}>→ list</button>
-              )}
-              {sub === "list" && (
-                <button onClick={() => moveTo(b.id,"reading")} style={{ ...ghst, padding:"4px 10px", fontSize:11 }}>→ reading</button>
-              )}
+              {MOVE_LABELS[sub]?.map(m => (
+                <button key={m.to} onClick={() => moveTo(b.id, m.to)} style={{ ...ghst, padding:"4px 10px", fontSize:11 }}>{m.label}</button>
+              ))}
               <button onClick={() => remove(b.id)} style={{ background:"none", border:"none", color:C.textDim, cursor:"pointer", fontSize:12, padding:0 }}>remove</button>
             </div>
           </div>
@@ -1583,7 +1594,7 @@ function ReadersTab({ books, setBooks }) {
 
       {displayed.length === 0 && !showAdd && (
         <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:"italic", fontSize:14, color:C.textDim, textAlign:"center", marginTop:20 }}>
-          {sub === "reading" ? "what are you reading right now?" : "books you want to read"}
+          {emptyMsg[sub]}
         </p>
       )}
     </div>
