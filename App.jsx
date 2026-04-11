@@ -1039,7 +1039,21 @@ function GoalsTab({goals,setGoals}) {
 function CycleTab({cycleData,setCycleData,info}) {
   const [editing,setEditing]=useState(!cycleData.lastPeriod);
   const [form,setForm]=useState(cycleData);
-  const save=()=>{setCycleData(form);setEditing(false);};
+
+  // sync form when remote data loads (e.g. switching devices)
+  useEffect(()=>{
+    setForm(cycleData);
+    if(cycleData.lastPeriod) setEditing(false);
+  },[cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength]);
+
+  const save=()=>{
+    setCycleData({
+      ...form,
+      cycleLength: parseInt(form.cycleLength)||28,
+      periodLength: parseInt(form.periodLength)||5,
+    });
+    setEditing(false);
+  };
   if(editing||!info) return (
     <div>
       <div style={{background:`linear-gradient(135deg,${C.blush}12,${C.card})`,border:`1px solid ${C.border}`,borderRadius:18,padding:"22px 18px",marginBottom:20}}>
@@ -1047,8 +1061,8 @@ function CycleTab({cycleData,setCycleData,info}) {
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
         <div><label style={lbl}>first day of last period</label><input type="date" value={form.lastPeriod} onChange={e=>setForm(f=>({...f,lastPeriod:e.target.value}))} style={inp}/></div>
-        <div><label style={lbl}>cycle length (days)</label><input type="number" min="21" max="90" value={form.cycleLength} onChange={e=>setForm(f=>({...f,cycleLength:parseInt(e.target.value)||28}))} style={inp}/></div>
-        <div><label style={lbl}>period length (days)</label><input type="number" min="2" max="10" value={form.periodLength} onChange={e=>setForm(f=>({...f,periodLength:parseInt(e.target.value)||5}))} style={inp}/></div>
+        <div><label style={lbl}>cycle length (days)</label><input type="text" inputMode="numeric" pattern="[0-9]*" value={form.cycleLength} onChange={e=>setForm(f=>({...f,cycleLength:e.target.value}))} style={inp}/></div>
+        <div><label style={lbl}>period length (days)</label><input type="text" inputMode="numeric" pattern="[0-9]*" value={form.periodLength} onChange={e=>setForm(f=>({...f,periodLength:e.target.value}))} style={inp}/></div>
         <button onClick={save} style={btn}>save</button>
       </div>
     </div>
@@ -1606,7 +1620,8 @@ function LoginScreen({ onAuth }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const submit = async () => {
+  const submit = async (e) => {
+    if (e) e.preventDefault();
     if (!email || !password) return setError('enter email and password');
     setLoading(true); setError('');
     const res = mode === 'login' ? await api.login(email, password) : await api.signup(email, password);
@@ -1617,6 +1632,8 @@ function LoginScreen({ onAuth }) {
     onAuth(res.token, email);
   };
 
+  const inputStyle = { width:'100%', background:C.card, border:`1px solid ${C.borderMid}`, borderRadius:10, padding:'12px 14px', color:C.text, fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' };
+
   return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
       <div style={{ width:'100%', maxWidth:430, background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, padding:'32px 28px', boxShadow:'0 28px 80px rgba(0,0,0,0.32)' }}>
@@ -1624,21 +1641,25 @@ function LoginScreen({ onAuth }) {
         <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.textDim, textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>daily anchor app</div>
         <div style={{ display:'flex', gap:8, marginBottom:24 }}>
           {['login','signup'].map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{ flex:1, padding:'10px', borderRadius:10, border:`1px solid ${mode===m ? C.accent : C.borderMid}`, background:'none', color: mode===m ? C.accent : C.textDim, fontFamily:"'Outfit',sans-serif", fontSize:13, cursor:'pointer' }}>{m}</button>
+            <button key={m} type="button" onClick={() => setMode(m)} style={{ flex:1, padding:'10px', borderRadius:10, border:`1px solid ${mode===m ? C.accent : C.borderMid}`, background:'none', color: mode===m ? C.accent : C.textDim, fontFamily:"'Outfit',sans-serif", fontSize:13, cursor:'pointer' }}>{m}</button>
           ))}
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email" type="email"
-            style={{ width:'100%', background:C.card, border:`1px solid ${C.borderMid}`, borderRadius:10, padding:'12px 14px', color:C.text, fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
-          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="password" type="password"
-            onKeyDown={e => e.key === 'Enter' && submit()}
-            style={{ width:'100%', background:C.card, border:`1px solid ${C.borderMid}`, borderRadius:10, padding:'12px 14px', color:C.text, fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' }} />
+        <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <input
+            name="email" type="email" autoComplete="email"
+            value={email} onChange={e => setEmail(e.target.value)} placeholder="email"
+            style={inputStyle} />
+          <input
+            name="password" type="password"
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            value={password} onChange={e => setPassword(e.target.value)} placeholder="password"
+            style={inputStyle} />
           {error && <p style={{ color:C.blush, fontFamily:"'Outfit',sans-serif", fontSize:12, margin:0 }}>{error}</p>}
-          <button onClick={submit} disabled={loading}
-            style={{ background:'#C4694A', border:'none', borderRadius:10, padding:'13px', color:'#fff', fontFamily:"'Outfit',sans-serif", fontSize:14, fontWeight:500, cursor:'pointer', marginTop:4 }}>
+          <button type="submit" disabled={loading}
+            style={{ background:C.accent, border:'none', borderRadius:10, padding:'13px', color:'#fff', fontFamily:"'Outfit',sans-serif", fontSize:14, fontWeight:500, cursor:'pointer', marginTop:4 }}>
             {loading ? '...' : mode === 'login' ? 'log in' : 'create account'}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
