@@ -7,11 +7,33 @@ const DARK_THEME = {
   bg:"#0D0A06", surface:"#141009", card:"#1B1510",
   border:"#272018", borderMid:"#342C1E",
   text:"#EDE6D0", textMid:"#9A8E75", textDim:"#5A5040",
+  folderLayer:"linear-gradient(180deg, rgba(201,168,76,0.07), rgba(27,21,16,0.82))",
+  folderTab:"linear-gradient(180deg, rgba(201,168,76,0.20), rgba(201,168,76,0.10))",
+  folderTabOpen:"linear-gradient(180deg, rgba(201,168,76,0.22), rgba(196,105,74,0.18))",
+  folderFill:"linear-gradient(180deg, rgba(201,168,76,0.10) 0%, rgba(27,21,16,0.92) 78%)",
+  folderFillOpen:"linear-gradient(180deg, rgba(201,168,76,0.16) 0%, rgba(27,21,16,0.96) 72%)",
+  folderPanel:"linear-gradient(180deg, rgba(20,16,9,0.98), rgba(27,21,16,0.96))",
+  folderInset:"linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0))",
+  folderShadow:"0 10px 18px rgba(0,0,0,0.08)",
+  folderShadowOpen:"0 18px 34px rgba(0,0,0,0.18)",
+  folderStackStrong:"0.75",
+  folderStackSoft:"0.55",
 };
 const LIGHT_THEME = {
   bg:"#F5F0E8", surface:"#FDFAF5", card:"#EDE8DF",
   border:"#DDD5C5", borderMid:"#C5BAA5",
   text:"#2A2218", textMid:"#5A4F3A", textDim:"#9A8E75",
+  folderLayer:"linear-gradient(180deg, rgba(255,255,255,0.92), rgba(238,228,215,0.90))",
+  folderTab:"linear-gradient(180deg, #FBF6ED, #F2E8D9)",
+  folderTabOpen:"linear-gradient(180deg, #F8F0E3, #EEDFCB)",
+  folderFill:"linear-gradient(180deg, #F9F5EE 0%, #F0E8DD 100%)",
+  folderFillOpen:"linear-gradient(180deg, #FCF8F1 0%, #EEE4D7 100%)",
+  folderPanel:"#FFFCF8",
+  folderInset:"linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0))",
+  folderShadow:"0 10px 22px rgba(90,79,58,0.06)",
+  folderShadowOpen:"0 18px 30px rgba(90,79,58,0.09)",
+  folderStackStrong:"0.18",
+  folderStackSoft:"0.10",
 };
 if (typeof document !== "undefined") {
   const _r = document.documentElement;
@@ -21,6 +43,10 @@ const C = {
   bg:"var(--bg)", surface:"var(--surface)", card:"var(--card)",
   border:"var(--border)", borderMid:"var(--borderMid)",
   text:"var(--text)", textMid:"var(--textMid)", textDim:"var(--textDim)",
+  folderLayer:"var(--folderLayer)", folderTab:"var(--folderTab)", folderTabOpen:"var(--folderTabOpen)",
+  folderFill:"var(--folderFill)", folderFillOpen:"var(--folderFillOpen)", folderPanel:"var(--folderPanel)",
+  folderInset:"var(--folderInset)", folderShadow:"var(--folderShadow)", folderShadowOpen:"var(--folderShadowOpen)",
+  folderStackStrong:"var(--folderStackStrong)", folderStackSoft:"var(--folderStackSoft)",
   accent:"#C4694A", gold:"#C9A84C", sage:"#7A9E7E",
   blush:"#C47A8A", teal:"#5A9E9A", ice:"#7AB8C4",
 };
@@ -752,9 +778,6 @@ function RecipesTab({recipes,setRecipes}) {
 // ── JOURNAL ───────────────────────────────────────────────────────────────
 function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
   const folderBorder = open ? `${C.gold}88` : C.borderMid;
-  const folderFill = open
-    ? `linear-gradient(180deg, rgba(201,168,76,0.16) 0%, rgba(27,21,16,0.96) 72%)`
-    : `linear-gradient(180deg, rgba(201,168,76,0.10) 0%, rgba(27,21,16,0.92) 78%)`;
   const closedLayer = {
     position: "absolute",
     left: 14,
@@ -762,7 +785,7 @@ function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
     height: 48,
     borderRadius: 18,
     border: `1px solid ${C.border}`,
-    background: "linear-gradient(180deg, rgba(201,168,76,0.07), rgba(27,21,16,0.82))",
+    background: C.folderLayer,
   };
 
   return (
@@ -770,8 +793,8 @@ function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
       <div style={{position:"relative",paddingTop:22}}>
         {!open && (
           <>
-            <div style={{ ...closedLayer, top: 34, opacity: 0.55 }} />
-            <div style={{ ...closedLayer, top: 28, left: 8, right: 20, opacity: 0.75 }} />
+            <div style={{ ...closedLayer, top: 34, opacity: C.folderStackSoft }} />
+            <div style={{ ...closedLayer, top: 28, left: 8, right: 20, opacity: C.folderStackStrong }} />
           </>
         )}
         <button
@@ -782,7 +805,7 @@ function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
             left:16,
             minWidth:138,
             maxWidth:"58%",
-            background:open ? `linear-gradient(180deg, rgba(201,168,76,0.22), rgba(196,105,74,0.18))` : `linear-gradient(180deg, rgba(201,168,76,0.20), rgba(201,168,76,0.10))`,
+            background:open ? C.folderTabOpen : C.folderTab,
             border:`1px solid ${folderBorder}`,
             borderBottom:"none",
             borderTopLeftRadius:18,
@@ -793,7 +816,7 @@ function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
             cursor:"pointer",
             textAlign:"left",
             zIndex:4,
-            boxShadow:open ? "0 10px 20px rgba(0,0,0,0.14)" : "none",
+            boxShadow:open ? C.folderShadow : "none",
           }}
         >
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:C.text,lineHeight:1}}>
@@ -808,7 +831,7 @@ function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
           onClick={onToggle}
           style={{
             width:"100%",
-            background:folderFill,
+            background:open ? C.folderFillOpen : C.folderFill,
             border:`1px solid ${folderBorder}`,
             borderRadius:22,
             padding: open ? "30px 18px 16px" : "30px 18px 12px",
@@ -818,10 +841,10 @@ function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
             overflow:"hidden",
             minHeight: open ? 94 : 82,
             zIndex:3,
-            boxShadow:open ? "0 18px 34px rgba(0,0,0,0.18)" : "0 10px 18px rgba(0,0,0,0.08)",
+            boxShadow:open ? C.folderShadowOpen : C.folderShadow,
           }}
         >
-          <div style={{position:"absolute",top:0,left:0,right:0,height:54,background:"linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0))"}} />
+          <div style={{position:"absolute",top:0,left:0,right:0,height:54,background:C.folderInset}} />
           <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:10,position:"relative"}}>
             <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
               {entries.length} filed
@@ -831,14 +854,14 @@ function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
         </button>
       </div>
       {open && (
-        <div style={{background:`linear-gradient(180deg, rgba(20,16,9,0.98), rgba(27,21,16,0.96))`,border:`1px solid ${folderBorder}`,borderTop:"none",borderBottomLeftRadius:22,borderBottomRightRadius:22,padding:"14px 16px 12px",marginTop:-14,boxShadow:"0 18px 34px rgba(0,0,0,0.18)"}}>
+        <div style={{background:C.folderPanel,border:`1px solid ${folderBorder}`,borderTop:"none",borderBottomLeftRadius:22,borderBottomRightRadius:22,padding:"14px 16px 12px",marginTop:-14,boxShadow:C.folderShadowOpen}}>
           <div style={{display:"grid",gap:10,marginTop:10}}>
             {entries.map((entry, index) => (
               <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start",paddingTop:index === 0 ? 0 : 10,borderTop:index === 0 ? "none" : `1px solid ${C.border}`}}>
                 <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.accent}}>{index + 1}</span>
                 </div>
-                <div style={{flex:1}}>
+                <div style={{flex:1,minWidth:0}}>
                   <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
                 </div>
                 <button onClick={() => onDelete(entry.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
