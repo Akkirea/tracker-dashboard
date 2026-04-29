@@ -776,98 +776,70 @@ function RecipesTab({recipes,setRecipes}) {
 }
 
 // ── JOURNAL ───────────────────────────────────────────────────────────────
-function GratitudeFolder({ dateKey, entries, open, onToggle, onDelete }) {
-  const folderBorder = open ? `${C.gold}88` : C.borderMid;
-  const closedLayer = {
-    position: "absolute",
-    left: 14,
-    right: 14,
-    height: 48,
-    borderRadius: 18,
-    border: `1px solid ${C.border}`,
-    background: C.folderLayer,
-  };
+function GratitudeDay({ dateKey, entries, open, onToggle, onDelete }) {
+  return (
+    <div style={{borderBottom:`1px solid ${C.border}`,padding:"14px 0"}}>
+      <button
+        onClick={onToggle}
+        style={{width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"baseline",gap:12,textAlign:"left"}}
+      >
+        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:C.text,lineHeight:1}}>
+          {fmtShort(dateKey)}
+        </span>
+        <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase",flex:1}}>
+          {fmtWeekday(dateKey)}
+        </span>
+        <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
+          {entries.length} saved
+        </span>
+        <span style={{fontSize:11,color:open ? C.gold : C.textDim}}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{display:"grid",gap:10,marginTop:14,paddingLeft:2}}>
+          {entries.map((entry) => (
+            <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+              <div style={{width:4,height:4,borderRadius:"50%",background:C.gold,marginTop:13,flexShrink:0}} />
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
+              </div>
+              <button onClick={() => onDelete(entry.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GratitudeMonth({ monthKey, days, groupedEntries, open, openDay, onToggleMonth, onToggleDay, onDelete }) {
+  const entryCount = days.reduce((count, day) => count + groupedEntries[day].length, 0);
 
   return (
-    <div style={{marginBottom:12}}>
-      <div style={{position:"relative",paddingTop:22}}>
-        {!open && (
-          <>
-            <div style={{ ...closedLayer, top: 34, opacity: C.folderStackSoft }} />
-            <div style={{ ...closedLayer, top: 28, left: 8, right: 20, opacity: C.folderStackStrong }} />
-          </>
-        )}
-        <button
-          onClick={onToggle}
-          style={{
-            position:"absolute",
-            top:0,
-            left:16,
-            minWidth:138,
-            maxWidth:"58%",
-            background:open ? C.folderTabOpen : C.folderTab,
-            border:`1px solid ${folderBorder}`,
-            borderBottom:"none",
-            borderTopLeftRadius:18,
-            borderTopRightRadius:18,
-            borderBottomLeftRadius:10,
-            borderBottomRightRadius:10,
-            padding:"12px 16px 10px",
-            cursor:"pointer",
-            textAlign:"left",
-            zIndex:4,
-            boxShadow:open ? C.folderShadow : "none",
-          }}
-        >
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:C.text,lineHeight:1}}>
-            {fmtShort(dateKey)}
-          </div>
-          <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,marginTop:5,letterSpacing:"0.08em",textTransform:"uppercase"}}>
-            {fmtWeekday(dateKey)}
-          </div>
-        </button>
-
-        <button
-          onClick={onToggle}
-          style={{
-            width:"100%",
-            background:open ? C.folderFillOpen : C.folderFill,
-            border:`1px solid ${folderBorder}`,
-            borderRadius:22,
-            padding: open ? "30px 18px 16px" : "30px 18px 12px",
-            cursor:"pointer",
-            textAlign:"left",
-            position:"relative",
-            overflow:"hidden",
-            minHeight: open ? 94 : 82,
-            zIndex:3,
-            boxShadow:open ? C.folderShadowOpen : C.folderShadow,
-          }}
-        >
-          <div style={{position:"absolute",top:0,left:0,right:0,height:54,background:C.folderInset}} />
-          <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:10,position:"relative"}}>
-            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
-              {entries.length} filed
-            </div>
-            <span style={{fontSize:12,color:open ? C.gold : C.textDim}}>{open ? "▲" : "▼"}</span>
-          </div>
-        </button>
-      </div>
+    <div style={{borderBottom:`1px solid ${C.border}`,padding:"16px 0"}}>
+      <button
+        onClick={onToggleMonth}
+        style={{width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"baseline",gap:12,textAlign:"left"}}
+      >
+        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:C.text,lineHeight:1}}>
+          {fmtMonthYear(new Date(`${monthKey}-01T00:00:00`))}
+        </span>
+        <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,flex:1}}>
+          {entryCount} saved
+        </span>
+        <span style={{fontSize:11,color:open ? C.gold : C.textDim}}>{open ? "▲" : "▼"}</span>
+      </button>
       {open && (
-        <div style={{background:C.folderPanel,border:`1px solid ${folderBorder}`,borderTop:"none",borderBottomLeftRadius:22,borderBottomRightRadius:22,padding:"14px 16px 12px",marginTop:-14,boxShadow:C.folderShadowOpen}}>
-          <div style={{display:"grid",gap:10,marginTop:10}}>
-            {entries.map((entry, index) => (
-              <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start",paddingTop:index === 0 ? 0 : 10,borderTop:index === 0 ? "none" : `1px solid ${C.border}`}}>
-                <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}20`,border:`1px solid ${C.accent}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.accent}}>{index + 1}</span>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
-                </div>
-                <button onClick={() => onDelete(entry.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
-              </div>
-            ))}
-          </div>
+        <div style={{marginTop:10,paddingLeft:10,borderLeft:`1px solid ${C.border}`}}>
+          {days.map((day) => (
+            <GratitudeDay
+              key={day}
+              dateKey={day}
+              entries={groupedEntries[day]}
+              open={openDay === day}
+              onToggle={() => onToggleDay(day)}
+              onDelete={onDelete}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -885,10 +857,20 @@ function JournalTab({entries,setEntries}) {
   }, {});
   const orderedDays = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
   const [openDay, setOpenDay] = useState(null);
-  const todayE = groupedEntries[tk] || [];
-  const archiveDays = orderedDays.filter((day) => day !== tk);
+  const [openMonth, setOpenMonth] = useState(null);
+  const currentMonthKey = tk.slice(0, 7);
+  const currentMonthDays = orderedDays.filter((day) => day.startsWith(currentMonthKey));
+  const archivedMonthKeys = [...new Set(orderedDays
+    .map((day) => day.slice(0, 7))
+    .filter((monthKey) => monthKey !== currentMonthKey))]
+    .sort((a, b) => b.localeCompare(a));
+  const daysByMonth = archivedMonthKeys.reduce((months, monthKey) => {
+    months[monthKey] = orderedDays.filter((day) => day.startsWith(monthKey));
+    return months;
+  }, {});
   const add=()=>{if(!text.trim())return;setEntries(p=>[{id:`j${Date.now()}`,date:toLocalIsoString(),text:text.trim()},...p]);setText("");};
   const del=id=>setEntries(p=>p.filter(e=>e.id!==id));
+  const toggleDay = (day) => setOpenDay((current) => current === day ? null : day);
 
   useEffect(() => {
     if (!orderedDays.length) {
@@ -900,6 +882,12 @@ function JournalTab({entries,setEntries}) {
     }
   }, [openDay, orderedDays, groupedEntries]);
 
+  useEffect(() => {
+    if (openMonth && !archivedMonthKeys.includes(openMonth)) {
+      setOpenMonth(null);
+    }
+  }, [openMonth, archivedMonthKeys]);
+
   return (
     <div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 18px 14px",marginBottom:22}}>
@@ -910,28 +898,34 @@ function JournalTab({entries,setEntries}) {
           <button onClick={add} style={btn}>save entry</button>
         </div>
       </div>
-      {todayE.length>0&&(
-        <>
-          <span style={sec}>today's folder</span>
-          <GratitudeFolder
-            dateKey={tk}
-            entries={todayE}
-            open={openDay === tk}
-            onToggle={() => setOpenDay((current) => current === tk ? null : tk)}
-            onDelete={del}
-          />
-        </>
-      )}
-      {archiveDays.length>0&&(
-        <div style={{marginTop:16}}>
-          <span style={sec}>archive</span>
-          {archiveDays.slice(0,12).map((day) => (
-            <GratitudeFolder
+      {currentMonthDays.length>0&&(
+        <div>
+          <span style={sec}>{fmtMonthYear(new Date(`${currentMonthKey}-01T00:00:00`))}</span>
+          {currentMonthDays.map((day) => (
+            <GratitudeDay
               key={day}
               dateKey={day}
               entries={groupedEntries[day]}
               open={openDay === day}
-              onToggle={() => setOpenDay((current) => current === day ? null : day)}
+              onToggle={() => toggleDay(day)}
+              onDelete={del}
+            />
+          ))}
+        </div>
+      )}
+      {archivedMonthKeys.length>0&&(
+        <div style={{marginTop:16}}>
+          <span style={sec}>archive by month</span>
+          {archivedMonthKeys.map((monthKey) => (
+            <GratitudeMonth
+              key={monthKey}
+              monthKey={monthKey}
+              days={daysByMonth[monthKey]}
+              groupedEntries={groupedEntries}
+              open={openMonth === monthKey}
+              openDay={openDay}
+              onToggleMonth={() => setOpenMonth((current) => current === monthKey ? null : monthKey)}
+              onToggleDay={toggleDay}
               onDelete={del}
             />
           ))}
@@ -1002,6 +996,81 @@ function NotesTab({notes, setNotes}) {
               {note.text}
             </p>
           )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── QUOTES ───────────────────────────────────────────────────────────────
+function QuotesTab({quotes, setQuotes}) {
+  const [text, setText] = useState("");
+  const [source, setSource] = useState("");
+
+  const add = () => {
+    if (!text.trim()) return;
+    setQuotes((current) => [
+      {
+        id: `q${Date.now()}`,
+        text: text.trim(),
+        source: source.trim(),
+        date: new Date().toISOString(),
+      },
+      ...current,
+    ]);
+    setText("");
+    setSource("");
+  };
+
+  const remove = (id) => setQuotes((current) => current.filter((quote) => quote.id !== id));
+
+  return (
+    <div>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 18px 14px",marginBottom:22}}>
+        <span style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,display:"block",marginBottom:10}}>inspired quotes</span>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="write the quote here..."
+          rows={4}
+          style={{...inp, resize:"vertical", lineHeight:1.7, fontFamily:"'Cormorant Garamond',serif", fontSize:17, marginBottom:10}}
+        />
+        <input
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="author, book, or source"
+          style={inp}
+        />
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
+          <button onClick={add} style={btn}>save quote</button>
+        </div>
+      </div>
+      {quotes.length === 0 && (
+        <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>
+          your quotes will live here
+        </p>
+      )}
+      {quotes.map((quote) => (
+        <div key={quote.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 18px",marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:C.text,lineHeight:1.55,margin:0,whiteSpace:"pre-wrap"}}>
+                "{quote.text}"
+              </p>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:10}}>
+                {quote.source && (
+                  <span style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textMid}}>
+                    {quote.source}
+                  </span>
+                )}
+                <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>
+                  {fmtShort(quote.date)}
+                </span>
+              </div>
+            </div>
+            <button onClick={() => remove(quote.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>remove</button>
+          </div>
         </div>
       ))}
     </div>
@@ -1644,6 +1713,7 @@ const TABS = [
   {id:"recipes", icon:"✿", label:"recipes" },
   {id:"readers", icon:"◈", label:"readers" },
   {id:"goals",   icon:"△", label:"dreams"  },
+  {id:"quotes",  icon:"❝", label:"quotes"  },
   {id:"cycle",   icon:"◑", label:"cycle"   },
 ];
 
@@ -1722,6 +1792,7 @@ export default function App() {
   const [journal,setJournal]       = useState([]);
   const [notes,setNotes]           = useState([]);
   const [goals,setGoals]           = useState([]);
+  const [quotes,setQuotes]         = useState([]);
   const [schedule,setSchedule]     = useState([]);
   const [cycleData,setCycleData]   = useState({lastPeriod:"",cycleLength:28,periodLength:5});
   const [loaded,setLoaded]         = useState(false);
@@ -1784,6 +1855,7 @@ export default function App() {
     if (remote.journal) setJournal(remote.journal);
     if (remote.notes) setNotes(remote.notes);
     if (remote.goals) setGoals(remote.goals);
+    if (remote.quotes) setQuotes(remote.quotes);
     if (remote.schedule) setSchedule(sortSchedule(remote.schedule));
     if (remote.cycle) setCycleData(remote.cycle);
     setLoaded(true);
@@ -1803,9 +1875,9 @@ export default function App() {
   useEffect(() => {
   if (!loaded || !token) return;
   const tk = todayKey();
-  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, schedule, cycle: cycleData };
+  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, quotes, schedule, cycle: cycleData };
   api.save(token, data);
-}, [anchors, anchorDone, focusTasks, focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, schedule, cycleData, loaded]);
+}, [anchors, anchorDone, focusTasks, focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, quotes, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
   const logout = () => {
@@ -1892,6 +1964,7 @@ export default function App() {
               <TabPanel active={tab==="recipes"}><RecipesTab recipes={recipes} setRecipes={setRecipes}/></TabPanel>
               <TabPanel active={tab==="readers"}><ReadersTab books={books} setBooks={setBooks}/></TabPanel>
               <TabPanel active={tab==="goals"}><GoalsTab goals={goals} setGoals={setGoals}/></TabPanel>
+              <TabPanel active={tab==="quotes"}><QuotesTab quotes={quotes} setQuotes={setQuotes}/></TabPanel>
               <TabPanel active={tab==="cycle"}><CycleTab cycleData={cycleData} setCycleData={setCycleData} info={cycleInfo}/></TabPanel>
             </div>
           </div>
