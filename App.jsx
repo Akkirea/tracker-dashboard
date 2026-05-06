@@ -65,6 +65,16 @@ const fmtMonthYear = (date) => date.toLocaleDateString("en-US", { month: "long",
 const fmtWeekday = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
 const isSameMonth = (left, right) =>
   left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+const startOfLocalDay = (date = new Date()) => {
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
+  return day;
+};
+const parseScheduleDate = (value) => {
+  if (!value) return null;
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 const sortSchedule = (items) =>
   [...items].sort((a, b) => {
     const left = `${a.date || ""}T${a.time || "99:99"}`;
@@ -72,24 +82,76 @@ const sortSchedule = (items) =>
     return left.localeCompare(right);
   });
 
-const getCycleInfo = (lastStr, cycleLen, periodLen) => {
+const MS_PER_DAY = 86400000;
+const dateOnly = (value) => {
+  const date = new Date(`${value}T00:00:00`);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+const normalizeCycleHistory = (cycleData = {}) => {
+  const starts = [
+    ...(Array.isArray(cycleData.history) ? cycleData.history : []),
+    ...(cycleData.lastPeriod ? [cycleData.lastPeriod] : []),
+  ]
+    .filter(Boolean)
+    .map((date) => String(date).slice(0, 10))
+    .filter((date, index, list) => list.indexOf(date) === index)
+    .sort();
+  return starts;
+};
+const averageCycleLength = (history, fallback = 28) => {
+  if (!Array.isArray(history) || history.length < 2) return parseInt(fallback) || 28;
+  const gaps = history
+    .slice(1)
+    .map((date, index) => Math.round((dateOnly(date) - dateOnly(history[index])) / MS_PER_DAY))
+    .filter((days) => days >= 18 && days <= 45);
+  if (!gaps.length) return parseInt(fallback) || 28;
+  return Math.round(gaps.reduce((sum, days) => sum + days, 0) / gaps.length);
+};
+
+const getCycleInfo = (lastStr, cycleLen, periodLen, history = []) => {
   if (!lastStr) return null;
-  const last = new Date(lastStr); last.setHours(0,0,0,0);
+  const normalizedHistory = normalizeCycleHistory({ history, lastPeriod: lastStr });
+  const avgCycleLen = averageCycleLength(normalizedHistory, cycleLen);
+  const activeCycleLen = avgCycleLen || parseInt(cycleLen) || 28;
+  const activePeriodLen = parseInt(periodLen) || 5;
+  const last = dateOnly(lastStr);
   const now  = new Date();        now.setHours(0,0,0,0);
-  const elapsed    = Math.floor((now - last) / 86400000);
-  const dayInCycle = (elapsed % cycleLen) + 1;
-  const daysLeft   = cycleLen - (elapsed % cycleLen);
-  const ovDay      = cycleLen - 14;
+  const elapsed    = Math.floor((now - last) / MS_PER_DAY);
+  const normalizedElapsed = ((elapsed % activeCycleLen) + activeCycleLen) % activeCycleLen;
+  const dayInCycle = normalizedElapsed + 1;
+  const daysLeft   = activeCycleLen - normalizedElapsed;
+  const ovDay      = Math.max(1, activeCycleLen - 14);
   const fertStart  = Math.max(1, ovDay - 5);
   const fertEnd    = ovDay + 1;
   const inFertile  = dayInCycle >= fertStart && dayInCycle <= fertEnd;
   const daysToOv   = Math.max(0, ovDay - dayInCycle);
+  const nextPeriod = new Date(now);
+  nextPeriod.setDate(now.getDate() + daysLeft);
+  const nextOvulation = new Date(last);
+  nextOvulation.setDate(last.getDate() + ovDay - 1 + Math.max(0, Math.floor(elapsed / activeCycleLen)) * activeCycleLen);
+  if (nextOvulation < now) nextOvulation.setDate(nextOvulation.getDate() + activeCycleLen);
   let phase;
-  if (dayInCycle <= periodLen)      phase = "menstrual";
+  if (dayInCycle <= activePeriodLen) phase = "menstrual";
   else if (dayInCycle < ovDay - 1)  phase = "follicular";
   else if (dayInCycle <= ovDay + 2) phase = "ovulation";
   else                              phase = "luteal";
-  return { dayInCycle, cycleLen, daysLeft, ovDay, phase, inFertile, daysToOv, fertStart, fertEnd };
+  return {
+    dayInCycle,
+    cycleLen: activeCycleLen,
+    avgCycleLen,
+    periodLen: activePeriodLen,
+    daysLeft,
+    ovDay,
+    phase,
+    inFertile,
+    daysToOv,
+    fertStart,
+    fertEnd,
+    nextPeriod: toDateInputValue(nextPeriod),
+    nextOvulation: toDateInputValue(nextOvulation),
+    history: normalizedHistory,
+  };
 };
 
 const PHASES = {
@@ -350,214 +412,81 @@ function BreathCircle({phase, progress, breathCount, round}) {
 }
 
 function WimHofTab() {
-  const [status, setStatus]   = useState("idle"); // idle | running | done
-  const [phase, setPhase]     = useState("inhale");
-  const [round, setRound]     = useState(1);
-  const [breath, setBreath]   = useState(0);   // 0-29
-  const [progress, setProgress] = useState(0); // 0-1
-  const [holdSecs, setHoldSecs] = useState(0);
-  const [holdActive, setHoldActive] = useState(false);
-  const [recoveryLeft, setRecoveryLeft] = useState(15);
+  const [status, setStatus] = useState("idle"); // idle | running | paused
   const audioRef = useRef(null);
-  const stateRef    = useRef({});
-  const intervalRef = useRef(null);
-  const clearAll = () => { clearInterval(intervalRef.current); };
-
-  const runBreathing = useCallback((currentBreath, currentRound) => {
-    stateRef.current = { breath:currentBreath, round:currentRound, cancelled:false };
-    const doBreath = (b) => {
-      if (stateRef.current.cancelled) return;
-      if (b >= BREATHS_PER_ROUND) {
-        // → empty hold
-        clearAll();
-        setPhase("holdEmpty");
-        setHoldActive(true);
-        setHoldSecs(0);
-        let s = 0;
-        intervalRef.current = setInterval(() => {
-          if (stateRef.current.cancelled) { clearAll(); return; }
-          s++;
-          setHoldSecs(s);
-        }, 1000);
-        return;
-      }
-      // inhale
-      setPhase("inhale");
-      setBreath(b);
-      setProgress(0);
-      let ticks = 0;
-      const INHALE_DUR = 20; // 100ms ticks × 20 = 2s
-      clearAll();
-      intervalRef.current = setInterval(() => {
-        if (stateRef.current.cancelled) { clearAll(); return; }
-        ticks++;
-        setProgress(ticks / INHALE_DUR);
-        if (ticks >= INHALE_DUR) {
-          clearAll();
-          // exhale
-          setPhase("exhale");
-          setProgress(0);
-          let et = 0;
-          intervalRef.current = setInterval(() => {
-            if (stateRef.current.cancelled) { clearAll(); return; }
-            et++;
-            setProgress(et / INHALE_DUR);
-            if (et >= INHALE_DUR) { clearAll(); doBreath(b + 1); }
-          }, 100);
-        }
-      }, 100);
-    };
-    doBreath(currentBreath);
-  }, []);
-
-  const endHold = () => {
-    if (!holdActive) return;
-    stateRef.current.cancelled = true;
-    clearAll();
-    setHoldActive(false);
-    const r = stateRef.current.round;
-    // → recovery hold (full inhale, hold 15s)
-    setPhase("holdFull");
-    setProgress(0);
-    let rt = 0;
-    intervalRef.current = setInterval(() => {
-      rt++;
-      setProgress(rt / 15);
-      setRecoveryLeft(15 - rt);
-      if (rt >= 15) {
-        clearAll();
-        if (r >= TOTAL_ROUNDS) {
-          setPhase("rest");
-          setStatus("done");
-        } else {
-          setPhase("rest");
-          setProgress(1);
-          setTimeout(() => {
-            const nextRound = r + 1;
-            setRound(nextRound);
-            setBreath(0);
-            stateRef.current = { breath:0, round:nextRound, cancelled:false };
-            runBreathing(0, nextRound);
-          }, 3000);
-        }
-      }
-    }, 1000);
-  };
 
   const start = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio('/Breathing.mp3');
+      audioRef.current.addEventListener("ended", () => setStatus("idle"));
+    }
+    audioRef.current.play();
     setStatus("running");
-    setRound(1);
-    setBreath(0);
-    setHoldSecs(0);
-    setHoldActive(false);
-    setPhase("inhale");
-    setProgress(0);
-    setTimeout(() => runBreathing(0, 1), 800);
   };
 
-  const reset = () => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
-    stateRef.current.cancelled = true;
-    clearAll();
+  const pause = () => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    setStatus("paused");
+  };
+
+  const end = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
     setStatus("idle");
-    setPhase("inhale");
-    setRound(1);
-    setBreath(0);
-    setProgress(0);
-    setHoldSecs(0);
-    setHoldActive(false);
-    setRecoveryLeft(15);
   };
 
-  useEffect(() => () => { stateRef.current.cancelled = true; clearAll(); }, []);
-
-  const ph = WH_PHASES[phase] || WH_PHASES.inhale;
+  useEffect(() => () => {
+    if (audioRef.current) audioRef.current.pause();
+  }, []);
 
   return (
     <div>
-      {/* header card — tappable during hold to release */}
-      <div onClick={phase==="holdEmpty" && holdActive ? endHold : undefined}
-        style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:"20px 18px",marginBottom:20,cursor:phase==="holdEmpty"&&holdActive?"pointer":"default"}}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:"24px 18px",marginBottom:20,textAlign:"center"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
           <span style={{fontSize:20}}>❄️</span>
           <div>
             <span style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>wim hof method</span>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,marginTop:1}}>3 rounds · ~10 minutes</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.text,marginTop:1}}>guided audio session</div>
           </div>
-          <div style={{marginLeft:"auto",fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim}}>round {round}/{TOTAL_ROUNDS}</div>
         </div>
-
-        {/* round dots */}
-        <div style={{display:"flex",gap:6,marginBottom:16}}>
-          {Array.from({length:TOTAL_ROUNDS}).map((_,i) => (
-            <div key={i} style={{height:3,flex:1,borderRadius:2,background:i<round-1?C.ice:i===round-1&&status==="running"?`${C.ice}70`:C.border,transition:"background 0.5s"}}/>
-          ))}
-        </div>
-
-        {/* circle + phase label */}
-        <div style={{textAlign:"center"}}>
-          {status !== "idle" && (
-            <BreathCircle phase={phase} progress={progress} breathCount={breath} round={round}/>
-          )}
-          {status === "idle" && (
-            <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{width:130,height:130,borderRadius:"50%",background:`radial-gradient(circle at 38% 38%, ${C.ice}30, ${C.ice}10)`,border:`1.5px solid ${C.ice}30`,margin:"0 auto 16px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{fontSize:40}}>❄️</span>
-                </div>
-                <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,margin:0}}>find a comfortable position</p>
-              </div>
+        <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{width:130,height:130,borderRadius:"50%",background:`radial-gradient(circle at 38% 38%, ${C.ice}30, ${C.ice}10)`,border:`1.5px solid ${C.ice}30`,margin:"0 auto 16px",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:status==="running"?`0 0 34px ${C.ice}25`:"none",transition:"box-shadow 0.3s ease"}}>
+              <span style={{fontSize:40}}>❄️</span>
             </div>
-          )}
-
-          {/* hold empty instructions */}
-          {phase==="holdEmpty" && status==="running" && (
-            <div style={{marginTop:8}}>
-              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:32,color:C.blush,fontWeight:300,marginBottom:6}}>{holdSecs}s</div>
-              <p style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,margin:0}}>tap anywhere to release</p>
-            </div>
-          )}
-
-          {/* recovery hold */}
-          {phase==="holdFull" && (
-            <div style={{marginTop:8}}>
-              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:32,color:C.gold,fontWeight:300}}>{recoveryLeft}s</div>
-              <p style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.textDim,margin:"4px 0 0"}}>hold that full breath</p>
-            </div>
-          )}
-
+            <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,margin:0}}>
+              {status==="running" ? "session playing" : status==="paused" ? "session paused" : "find a comfortable position"}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* controls */}
       <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-        {status==="idle" && <button onClick={() => {
-  if (audioRef.current) {
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-  }
-  audioRef.current = new Audio('/Breathing.mp3');
-  audioRef.current.play();
-  start();
-}} style={{...btn,background:C.ice,fontSize:14,padding:"13px 40px"}}>begin session</button>}
-        {status==="running" && phase!=="holdEmpty" && phase!=="holdFull" && <button onClick={reset} style={{...ghst,fontSize:13}}>end session</button>}
-        {status==="done" && (
+        {status==="idle" && (
+          <button onClick={start} style={{...btn,background:C.ice,fontSize:14,padding:"13px 40px"}}>begin</button>
+        )}
+        {status==="running" && (
+          <button onClick={pause} style={{...ghst,fontSize:13,padding:"13px 40px"}}>pause</button>
+        )}
+        {status==="paused" && (
           <>
-            <button onClick={reset} style={{...btn,background:C.sage,padding:"12px 28px"}}>new session</button>
+            <button onClick={start} style={{...btn,background:C.ice,fontSize:14,padding:"13px 28px"}}>resume</button>
+            <button onClick={end} style={{...ghst,fontSize:13,padding:"13px 28px"}}>end</button>
           </>
         )}
       </div>
 
-      {/* instructions */}
       {status==="idle" && (
         <div style={{marginTop:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px"}}>
           <span style={sec}>how it works</span>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {[
-              {n:"1",text:"30 deep breaths — let the circle guide you. inhale fully, exhale without force."},
-              {n:"2",text:"exhale and hold your breath. tap 'release & inhale' when you're ready (or around 90s)."},
-              {n:"3",text:"take one full breath in and hold for 15 seconds."},
-              {n:"4",text:"that's one round. repeat 3 times total."},
+              {n:"1",text:"press begin and follow the encoded audio."},
+              {n:"2",text:"pause if you need to step away."},
+              {n:"3",text:"press end to stop and return to the beginning."},
             ].map(s => (
               <div key={s.n} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
                 <div style={{width:22,height:22,borderRadius:"50%",background:`${C.ice}25`,border:`1px solid ${C.ice}40`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -625,6 +554,7 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
   const toggle = id=>setDoneIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const remove = id=>{setTasks(p=>p.filter(h=>h.id!==id));setDoneIds(p=>p.filter(x=>x!==id));};
   const add = ()=>{if(!newVal.trim())return;setTasks(p=>[...p,{id:`f${Date.now()}`,name:newVal.trim().toLowerCase(),emoji:EMOJIS[p.length%EMOJIS.length]}]);setNewVal("");setShowAdd(false);};
+  const visibleDoneCount = tasks.filter((task) => doneIds.includes(task.id)).length;
   return (
     <div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:"22px 20px",marginBottom:24,textAlign:"center"}}>
@@ -648,7 +578,7 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
           <button onClick={reset} style={ghst}>reset</button>
         </div>
       </div>
-      <ProgressBar done={doneIds.length} total={tasks.length} label="focus block" color={C.teal}/>
+      <ProgressBar done={visibleDoneCount} total={tasks.length} label="focus block" color={C.teal}/>
       <p style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,margin:"-8px 0 18px"}}>
         Timer plays a short beep when it reaches zero.
       </p>
@@ -723,54 +653,6 @@ function GroceryTab({items,setItems}) {
       )}
       {done.length>0&&<div style={{marginTop:24}}><span style={sec}>in the cart</span>{done.map(i=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)} alwaysShowDelete={true}/>)}</div>}
       {items.length===0&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>your grocery list is empty</p>}
-    </div>
-  );
-}
-
-// ── RECIPES ───────────────────────────────────────────────────────────────
-function RecipesTab({recipes,setRecipes}) {
-  const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({name:"",notes:"",emoji:"🥗"});
-  const [expanded,setExpanded]=useState(null);
-  const EMOJIS=["🥗","🍲","🌮","🥘","🍜","🫕","🥙","🍱","🌯","🥦","🫚","🌿","🍛","🥣","🧆"];
-  const add=()=>{if(!form.name.trim())return;setRecipes(p=>[...p,{id:`r${Date.now()}`,...form,name:form.name.trim()}]);setForm({name:"",notes:"",emoji:"🥗"});setShowAdd(false);};
-  return (
-    <div>
-      <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,margin:"0 0 22px"}}>your recipes</p>
-      {recipes.map(r=>(
-        <div key={r.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,marginBottom:10,overflow:"hidden"}}>
-          <div onClick={()=>setExpanded(e=>e===r.id?null:r.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",cursor:"pointer"}}>
-            <span style={{fontSize:20}}>{r.emoji}</span>
-            <span style={{fontFamily:"'Outfit',sans-serif",fontSize:14,flex:1,color:C.text}}>{r.name}</span>
-            <span style={{color:C.textDim,fontSize:11}}>{expanded===r.id?"▲":"▼"}</span>
-          </div>
-          {expanded===r.id&&(
-            <div style={{padding:"14px 16px 16px",borderTop:`1px solid ${C.border}`}}>
-              {r.notes&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:C.textMid,lineHeight:1.75,margin:"0 0 12px",whiteSpace:"pre-wrap"}}>{r.notes}</p>}
-              <button onClick={()=>setRecipes(p=>p.filter(x=>x.id!==r.id))} style={{background:"none",border:"none",color:C.textDim,fontFamily:"'Outfit',sans-serif",fontSize:12,cursor:"pointer",padding:0}}>remove recipe</button>
-            </div>
-          )}
-        </div>
-      ))}
-      {showAdd?(
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px",marginTop:4}}>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
-            {EMOJIS.map(e=>(
-              <button key={e} onClick={()=>setForm(f=>({...f,emoji:e}))}
-                style={{background:form.emoji===e?`${C.sage}30`:"none",border:`1px solid ${form.emoji===e?C.sage:C.borderMid}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:18}}>{e}</button>
-            ))}
-          </div>
-          <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="recipe name" style={{...inp,marginBottom:10}}/>
-          <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="ingredients, steps, link, or notes..." rows={5} style={{...inp,resize:"none",lineHeight:1.7,fontFamily:"'Cormorant Garamond',serif",fontSize:15}}/>
-          <div style={{display:"flex",gap:8,marginTop:12}}>
-            <button onClick={add} style={btn}>save recipe</button>
-            <button onClick={()=>setShowAdd(false)} style={ghst}>cancel</button>
-          </div>
-        </div>
-      ):(
-        <button onClick={()=>setShowAdd(true)} style={dash}>+ add recipe</button>
-      )}
-      {recipes.length===0&&!showAdd&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:16}}>save your go-to recipes here</p>}
     </div>
   );
 }
@@ -940,6 +822,8 @@ function JournalTab({entries,setEntries}) {
 function NotesTab({notes, setNotes}) {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ title:"", text:"" });
   const add = () => {
     if (!title.trim() && !text.trim()) return;
     setNotes((current) => [
@@ -955,6 +839,24 @@ function NotesTab({notes, setNotes}) {
     setText("");
   };
   const remove = (id) => setNotes((current) => current.filter((note) => note.id !== id));
+  const startEdit = (note) => {
+    setEditingId(note.id);
+    setEditForm({ title: note.title || "", text: note.text || "" });
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ title:"", text:"" });
+  };
+  const saveEdit = (id) => {
+    if (!editForm.title.trim() && !editForm.text.trim()) return;
+    setNotes((current) => current.map((note) => note.id === id ? {
+      ...note,
+      title: editForm.title.trim() || "untitled note",
+      text: editForm.text.trim(),
+      updatedAt: new Date().toISOString(),
+    } : note));
+    cancelEdit();
+  };
 
   return (
     <div>
@@ -984,17 +886,46 @@ function NotesTab({notes, setNotes}) {
       )}
       {notes.map((note) => (
         <div key={note.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+          {editingId === note.id ? (
             <div>
-              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:14,color:C.text}}>{note.title}</div>
-              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,marginTop:4}}>{fmtShort(note.date)}</div>
+              <input
+                value={editForm.title}
+                onChange={(e) => setEditForm((current) => ({ ...current, title: e.target.value }))}
+                placeholder="note title"
+                style={{...inp, marginBottom:10}}
+              />
+              <textarea
+                value={editForm.text}
+                onChange={(e) => setEditForm((current) => ({ ...current, text: e.target.value }))}
+                placeholder="write your note here..."
+                rows={5}
+                style={{...inp, resize:"vertical", lineHeight:1.7, fontFamily:"'Cormorant Garamond',serif", fontSize:16}}
+              />
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}}>
+                <button onClick={() => saveEdit(note.id)} style={btn}>save</button>
+                <button onClick={cancelEdit} style={ghst}>cancel</button>
+              </div>
             </div>
-            <button onClick={() => remove(note.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0}}>remove</button>
-          </div>
-          {note.text && (
-            <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.textMid,lineHeight:1.7,margin:"12px 0 0",whiteSpace:"pre-wrap"}}>
-              {note.text}
-            </p>
+          ) : (
+            <>
+              <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+                <div>
+                  <div style={{fontFamily:"'Outfit',sans-serif",fontSize:14,color:C.text}}>{note.title}</div>
+                  <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,marginTop:4}}>
+                    {fmtShort(note.date)}{note.updatedAt ? " · edited" : ""}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center",flexShrink:0}}>
+                  <button onClick={() => startEdit(note)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0}}>edit</button>
+                  <button onClick={() => remove(note.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0}}>remove</button>
+                </div>
+              </div>
+              {note.text && (
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.textMid,lineHeight:1.7,margin:"12px 0 0",whiteSpace:"pre-wrap"}}>
+                  {note.text}
+                </p>
+              )}
+            </>
           )}
         </div>
       ))}
@@ -1131,21 +1062,43 @@ function GoalsTab({goals,setGoals}) {
 function CycleTab({cycleData,setCycleData,info}) {
   const [editing,setEditing]=useState(!cycleData.lastPeriod);
   const [form,setForm]=useState(cycleData);
+  const history = normalizeCycleHistory(cycleData);
 
   // sync form when remote data loads (e.g. switching devices)
   useEffect(()=>{
-    setForm(cycleData);
+    setForm({
+      ...cycleData,
+      history: normalizeCycleHistory(cycleData),
+      cycleLength: cycleData.cycleLength || 28,
+      periodLength: cycleData.periodLength || 5,
+    });
     if(cycleData.lastPeriod) setEditing(false);
-  },[cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength]);
+  },[cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength, JSON.stringify(cycleData.history || [])]);
 
   const save=()=>{
+    const savedHistory = normalizeCycleHistory({ ...form, lastPeriod: form.lastPeriod });
+    const average = averageCycleLength(savedHistory, form.cycleLength);
     setCycleData({
       ...form,
-      cycleLength: parseInt(form.cycleLength)||28,
+      history: savedHistory,
+      cycleLength: average,
       periodLength: parseInt(form.periodLength)||5,
     });
     setEditing(false);
   };
+  const beginMenstruation = () => {
+    const today = todayKey();
+    const nextHistory = normalizeCycleHistory({ history, lastPeriod: today });
+    setCycleData((current) => ({
+      ...current,
+      lastPeriod: today,
+      history: nextHistory,
+      cycleLength: averageCycleLength(nextHistory, current.cycleLength),
+      periodLength: parseInt(current.periodLength) || 5,
+    }));
+    setEditing(false);
+  };
+
   if(editing||!info) return (
     <div>
       <div style={{background:`linear-gradient(135deg,${C.blush}12,${C.card})`,border:`1px solid ${C.border}`,borderRadius:18,padding:"22px 18px",marginBottom:20}}>
@@ -1155,7 +1108,18 @@ function CycleTab({cycleData,setCycleData,info}) {
         <div><label style={lbl}>first day of last period</label><input type="date" value={form.lastPeriod} onChange={e=>setForm(f=>({...f,lastPeriod:e.target.value}))} style={inp}/></div>
         <div><label style={lbl}>cycle length (days)</label><input type="text" inputMode="numeric" pattern="[0-9]*" value={form.cycleLength} onChange={e=>setForm(f=>({...f,cycleLength:e.target.value}))} style={inp}/></div>
         <div><label style={lbl}>period length (days)</label><input type="text" inputMode="numeric" pattern="[0-9]*" value={form.periodLength} onChange={e=>setForm(f=>({...f,periodLength:e.target.value}))} style={inp}/></div>
-        <button onClick={save} style={btn}>save</button>
+        {history.length > 0 && (
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
+            <span style={lbl}>period history</span>
+            <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:C.textMid,lineHeight:1.6,margin:"6px 0 0"}}>
+              {history.slice(-5).reverse().join(" · ")}
+            </p>
+          </div>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <button onClick={beginMenstruation} style={{...btn,background:C.blush}}>begin menstruation</button>
+          <button onClick={save} style={btn}>save</button>
+        </div>
       </div>
     </div>
   );
@@ -1185,6 +1149,16 @@ function CycleTab({cycleData,setCycleData,info}) {
         </div>
       </div>
       {info.inFertile&&<div style={{background:`${C.sage}14`,border:`1px solid ${C.sage}30`,borderRadius:12,padding:"12px 16px",marginBottom:14,fontFamily:"'Outfit',sans-serif",fontSize:13,color:C.sage}}>🌿 fertile window — cycle days {info.fertStart}–{info.fertEnd}</div>}
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        <div>
+          <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>predicted ovulation</span>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.sage,marginTop:3}}>{info.nextOvulation}</div>
+        </div>
+        <div>
+          <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>average cycle</span>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:C.gold,marginTop:3}}>{info.avgCycleLen} days</div>
+        </div>
+      </div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
         <span style={{fontSize:16}}>⚡</span>
         <div>
@@ -1192,7 +1166,18 @@ function CycleTab({cycleData,setCycleData,info}) {
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,color:ph.color,marginTop:1}}>{ph.energy}</div>
         </div>
       </div>
-      <button onClick={()=>setEditing(true)} style={{...ghst,width:"100%"}}>edit cycle info</button>
+      {history.length > 1 && (
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 16px",marginBottom:14}}>
+          <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase"}}>recent period starts</span>
+          <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:C.textMid,lineHeight:1.6,margin:"6px 0 0"}}>
+            {history.slice(-5).reverse().join(" · ")}
+          </p>
+        </div>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button onClick={beginMenstruation} style={{...btn,width:"100%",background:C.blush}}>begin menstruation</button>
+        <button onClick={()=>setEditing(true)} style={{...ghst,width:"100%"}}>edit cycle info</button>
+      </div>
     </div>
   );
 }
@@ -1200,6 +1185,7 @@ function CycleTab({cycleData,setCycleData,info}) {
 // ── SCHEDULE ──────────────────────────────────────────────────────────────
 function ScheduleTab({ events, setEvents, wide = false }) {
   const today = toDateInputValue(new Date());
+  const todayStart = startOfLocalDay();
   const sortedEvents = sortSchedule(events);
   const [selectedDate, setSelectedDate] = useState(today);
   const [viewDate, setViewDate] = useState(() => {
@@ -1260,7 +1246,10 @@ function ScheduleTab({ events, setEvents, wide = false }) {
   });
 
   const upcoming = sortedEvents
-    .filter((event) => event.date >= today)
+    .filter((event) => {
+      const eventDate = parseScheduleDate(event.date);
+      return eventDate && eventDate >= todayStart;
+    })
     .slice(0, 5);
 
   const addEvent = () => {
@@ -1609,13 +1598,10 @@ function ReadersTab({ books, setBooks }) {
 
   const SUBS = [
     { id:"reading",   label:"reading"   },
-    { id:"upnext",    label:"up next"   },
     { id:"completed", label:"completed" },
   ];
 
-  const displayed = books.filter(b => b.status === sub);
-
-  const statusAfter = { reading:"upnext", upnext:"reading", completed:"reading" };
+  const displayed = books.filter(b => sub === "reading" ? b.status !== "completed" : b.status === "completed");
 
   const add = () => {
     if (!form.title.trim()) return;
@@ -1627,12 +1613,11 @@ function ReadersTab({ books, setBooks }) {
   const moveTo  = (id, status) => setBooks(p => p.map(b => b.id === id ? {...b, status} : b));
 
   const MOVE_LABELS = {
-    reading:   [{ to:"upnext",    label:"→ up next"   }, { to:"completed", label:"✓ done" }],
-    upnext:    [{ to:"reading",   label:"→ reading"   }, { to:"completed", label:"✓ done" }],
+    reading:   [{ to:"completed", label:"✓ done" }],
     completed: [{ to:"reading",   label:"→ reading"   }],
   };
 
-  const emptyMsg = { reading:"what are you reading right now?", upnext:"books you want to read next", completed:"your finished reads will live here" };
+  const emptyMsg = { reading:"what are you reading right now?", completed:"your finished reads will live here" };
 
   return (
     <div>
@@ -1710,7 +1695,6 @@ const TABS = [
   {id:"schedule",icon:"☷", label:"schedule" },
   {id:"notes",   icon:"✎", label:"notes"   },
   {id:"grocery", icon:"◻", label:"grocery" },
-  {id:"recipes", icon:"✿", label:"recipes" },
   {id:"readers", icon:"◈", label:"readers" },
   {id:"goals",   icon:"△", label:"dreams"  },
   {id:"quotes",  icon:"❝", label:"quotes"  },
@@ -1778,7 +1762,10 @@ export default function App() {
     const saved = localStorage.getItem('email');
     return saved && saved !== "undefined" ? saved : "";
   });
-  const [tab,setTab]               = useState(() => localStorage.getItem('tab') || "today");
+  const [tab,setTab]               = useState(() => {
+    const savedTab = localStorage.getItem('tab') || "today";
+    return savedTab === "recipes" ? "today" : savedTab;
+  });
   const [anchors,setAnchors]       = useState(DEFAULT_ANCHORS);
   const [anchorDone,setAnchorDone] = useState([]);
   const [focusTasks,setFocusTasks] = useState(DEFAULT_FOCUS);
@@ -1788,7 +1775,6 @@ export default function App() {
   const [books,setBooks]           = useState([]);
   const [savedAffirms,setSavedAffirms] = useState([]);
   const [sidebarQuote, setSidebarQuote] = useState("");
-  const [recipes,setRecipes]       = useState([]);
   const [journal,setJournal]       = useState([]);
   const [notes,setNotes]           = useState([]);
   const [goals,setGoals]           = useState([]);
@@ -1835,6 +1821,10 @@ export default function App() {
   }, [isDark]);
 
   useEffect(() => {
+    if (tab === "recipes") {
+      setTab("today");
+      return;
+    }
     localStorage.setItem('tab', tab);
   }, [tab]);
 
@@ -1851,7 +1841,6 @@ export default function App() {
     if (remote.grocery) setGrocery(remote.grocery);
     if (remote.books) setBooks(remote.books);
     if (remote.savedAffirms) setSavedAffirms(remote.savedAffirms);
-    if (remote.recipes) setRecipes(remote.recipes);
     if (remote.journal) setJournal(remote.journal);
     if (remote.notes) setNotes(remote.notes);
     if (remote.goals) setGoals(remote.goals);
@@ -1875,11 +1864,11 @@ export default function App() {
   useEffect(() => {
   if (!loaded || !token) return;
   const tk = todayKey();
-  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, quotes, schedule, cycle: cycleData };
+  const data = { anchors, [`adone-${tk}`]: anchorDone, focusTasks, [`fdone-${tk}`]: focusDone, grocery, books, savedAffirms, journal, notes, goals, quotes, schedule, cycle: cycleData };
   api.save(token, data);
-}, [anchors, anchorDone, focusTasks, focusDone, grocery, books, savedAffirms, recipes, journal, notes, goals, quotes, schedule, cycleData, loaded]);
+}, [anchors, anchorDone, focusTasks, focusDone, grocery, books, savedAffirms, journal, notes, goals, quotes, schedule, cycleData, loaded]);
 
-  const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength);
+  const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength,cycleData.history);
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('email');
@@ -1961,7 +1950,6 @@ export default function App() {
               <TabPanel active={tab==="schedule"}><ScheduleTab events={schedule} setEvents={setSchedule} wide={isWideContent}/></TabPanel>
               <TabPanel active={tab==="notes"}><NotesTab notes={notes} setNotes={setNotes}/></TabPanel>
               <TabPanel active={tab==="grocery"}><GroceryTab items={grocery} setItems={setGrocery}/></TabPanel>
-              <TabPanel active={tab==="recipes"}><RecipesTab recipes={recipes} setRecipes={setRecipes}/></TabPanel>
               <TabPanel active={tab==="readers"}><ReadersTab books={books} setBooks={setBooks}/></TabPanel>
               <TabPanel active={tab==="goals"}><GoalsTab goals={goals} setGoals={setGoals}/></TabPanel>
               <TabPanel active={tab==="quotes"}><QuotesTab quotes={quotes} setQuotes={setQuotes}/></TabPanel>
