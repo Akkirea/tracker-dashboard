@@ -505,6 +505,13 @@ function WimHofTab() {
   );
 }
 
+const pickEmoji = (pool, existing) => {
+  const used = existing.map(i=>i.emoji);
+  const avail = pool.filter(e=>!used.includes(e));
+  const src = avail.length ? avail : pool;
+  return src[Math.floor(Math.random()*src.length)];
+};
+
 // ── TODAY ─────────────────────────────────────────────────────────────────
 function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
   const [showAdd,setShowAdd] = useState(false);
@@ -514,7 +521,7 @@ function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
   const remove = id => {setHabits(p=>p.filter(h=>h.id!==id));setDoneIds(p=>p.filter(x=>x!==id));};
   const add = () => {
     if (!newVal.trim()) return;
-    setHabits(p=>[...p,{id:`a${Date.now()}`,name:newVal.trim().toLowerCase(),emoji:EMOJIS[p.length%EMOJIS.length]}]);
+    setHabits(p=>[...p,{id:`a${Date.now()}`,name:newVal.trim().toLowerCase(),emoji:pickEmoji(EMOJIS,p)}]);
     setNewVal(""); setShowAdd(false);
   };
   return (
@@ -530,30 +537,41 @@ function TodayTab({habits,doneIds,setDoneIds,setHabits}) {
 }
 
 // ── FOCUS ─────────────────────────────────────────────────────────────────
-function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
+function FocusTab({tasks,doneIds,setDoneIds,setTasks,music}) {
   const [showAdd,setShowAdd] = useState(false);
   const [newVal,setNewVal]   = useState("");
   const [timer,setTimer]     = useState(15*60);
   const [running,setRunning] = useState(false);
   const [sessionMin,setSessionMin] = useState(15);
+  const [customMin,setCustomMin] = useState("");
   const ref = useRef(null);
   const didAlertRef = useRef(false);
   const EMOJIS = ["🎯","📝","💻","🔬","📊","🗂️","✏️","🔧","🧠","📐"];
   useEffect(()=>{
-    if(running){ref.current=setInterval(()=>setTimer(t=>{if(t<=1){clearInterval(ref.current);setRunning(false);didAlertRef.current = true;playCompletionBeep();return 0;}return t-1;}),1000);}
-    else clearInterval(ref.current);
+    if(running){
+      const startTime=Date.now(), startTimer=timer;
+      ref.current=setInterval(()=>{
+        const newT=startTimer-Math.floor((Date.now()-startTime)/1000);
+        if(newT<=0){clearInterval(ref.current);setRunning(false);didAlertRef.current=true;playCompletionBeep();setTimer(0);}
+        else setTimer(newT);
+      },500);
+    } else clearInterval(ref.current);
     return ()=>clearInterval(ref.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[running]);
   useEffect(() => {
     if (timer > 0) didAlertRef.current = false;
   }, [timer]);
+
+
+  const applyCustomMin=()=>{const m=parseInt(customMin,10);if(!customMin.trim()||!m||m<1||m>180)return;setSessionMin(m);setTimer(m*60);setRunning(false);setCustomMin("");};
   const reset = ()=>{setRunning(false);setTimer(sessionMin*60);didAlertRef.current = false;};
   const fmt = s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const pct = ((sessionMin*60-timer)/(sessionMin*60))*100;
   const r=54, circ=2*Math.PI*r;
   const toggle = id=>setDoneIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const remove = id=>{setTasks(p=>p.filter(h=>h.id!==id));setDoneIds(p=>p.filter(x=>x!==id));};
-  const add = ()=>{if(!newVal.trim())return;setTasks(p=>[...p,{id:`f${Date.now()}`,name:newVal.trim().toLowerCase(),emoji:EMOJIS[p.length%EMOJIS.length]}]);setNewVal("");setShowAdd(false);};
+  const add = ()=>{if(!newVal.trim())return;setTasks(p=>[...p,{id:`f${Date.now()}`,name:newVal.trim().toLowerCase(),emoji:pickEmoji(EMOJIS,p)}]);setNewVal("");setShowAdd(false);};
   const visibleDoneCount = tasks.filter((task) => doneIds.includes(task.id)).length;
   return (
     <div>
@@ -567,11 +585,12 @@ function FocusTab({tasks,doneIds,setDoneIds,setTasks}) {
             <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,fontWeight:300,color:C.text}}>{fmt(timer)}</span>
           </div>
         </div>
-        <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
           {[15,25,45,60].map(m=>(
             <button key={m} onClick={()=>{setSessionMin(m);setTimer(m*60);setRunning(false);}}
               style={{...ghst,padding:"6px 14px",fontSize:12,border:`1px solid ${sessionMin===m?C.teal:C.borderMid}`,color:sessionMin===m?C.teal:C.textDim}}>{m}m</button>
           ))}
+          <input type="number" min="1" max="180" value={customMin} onChange={e=>setCustomMin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&applyCustomMin()} onBlur={applyCustomMin} placeholder="min" style={{...inp,width:60,padding:"4px 8px",fontSize:12,textAlign:"center"}}/>
         </div>
         <div style={{display:"flex",justifyContent:"center",gap:10}}>
           <button onClick={()=>setRunning(r=>!r)} style={{...btn,background:running?C.accent:C.teal,minWidth:90}}>{running?"pause":timer===sessionMin*60?"start":"resume"}</button>
@@ -629,7 +648,7 @@ function GroceryTab({items,setItems}) {
         <p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:15,color:C.textMid,margin:0}}>grocery list</p>
         {done.length>0&&<button onClick={clearDone} style={{background:"none",border:"none",color:C.textDim,fontFamily:"'Outfit',sans-serif",fontSize:12,cursor:"pointer"}}>clear checked ({done.length})</button>}
       </div>
-      {active.map((i, index)=><GroceryRow key={i.id} item={i} onToggle={()=>toggle(i.id)} onRemove={()=>remove(i.id)}
+      {active.map((i, index)=><GroceryRow key={i.id} item={i} onToggle={()=>remove(i.id)} onRemove={()=>remove(i.id)}
         onMoveUp={index > 0 ? () => setItems((p) => {
           const activeItems = p.filter((item) => !item.done);
           const doneItems = p.filter((item) => item.done);
@@ -665,7 +684,7 @@ function GratitudeDay({ dateKey, entries, open, onToggle, onDelete }) {
         onClick={onToggle}
         style={{width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"baseline",gap:12,textAlign:"left"}}
       >
-        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:C.text,lineHeight:1}}>
+        <span style={{fontFamily:"'Outfit',sans-serif",fontSize:15,fontWeight:500,color:C.text,lineHeight:1}}>
           {fmtShort(dateKey)}
         </span>
         <span style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.textDim,letterSpacing:"0.08em",textTransform:"uppercase",flex:1}}>
@@ -682,7 +701,7 @@ function GratitudeDay({ dateKey, entries, open, onToggle, onDelete }) {
             <div key={entry.id} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
               <div style={{width:4,height:4,borderRadius:"50%",background:C.gold,marginTop:13,flexShrink:0}} />
               <div style={{flex:1,minWidth:0}}>
-                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
+                <p style={{fontFamily:"'Outfit',sans-serif",fontSize:14,color:C.text,lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{entry.text}</p>
               </div>
               <button onClick={() => onDelete(entry.id)} style={{background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:12,padding:0,flexShrink:0}}>✕</button>
             </div>
@@ -702,7 +721,7 @@ function GratitudeMonth({ monthKey, days, groupedEntries, open, openDay, onToggl
         onClick={onToggleMonth}
         style={{width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"baseline",gap:12,textAlign:"left"}}
       >
-        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:C.text,lineHeight:1}}>
+        <span style={{fontFamily:"'Outfit',sans-serif",fontSize:16,fontWeight:500,color:C.text,lineHeight:1}}>
           {fmtMonthYear(new Date(`${monthKey}-01T00:00:00`))}
         </span>
         <span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.textDim,flex:1}}>
@@ -738,9 +757,9 @@ function JournalTab({entries,setEntries}) {
     return groups;
   }, {});
   const orderedDays = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
-  const [openDay, setOpenDay] = useState(null);
-  const [openMonth, setOpenMonth] = useState(null);
   const currentMonthKey = tk.slice(0, 7);
+  const [openDay, setOpenDay] = useState(null);
+  const [openMonth, setOpenMonth] = useState(currentMonthKey);
   const currentMonthDays = orderedDays.filter((day) => day.startsWith(currentMonthKey));
   const archivedMonthKeys = [...new Set(orderedDays
     .map((day) => day.slice(0, 7))
@@ -765,54 +784,34 @@ function JournalTab({entries,setEntries}) {
   }, [openDay, orderedDays, groupedEntries]);
 
   useEffect(() => {
-    if (openMonth && !archivedMonthKeys.includes(openMonth)) {
+    if (openMonth && openMonth !== currentMonthKey && !archivedMonthKeys.includes(openMonth)) {
       setOpenMonth(null);
     }
-  }, [openMonth, archivedMonthKeys]);
+  }, [openMonth, currentMonthKey, archivedMonthKeys]);
 
   return (
     <div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 18px 14px",marginBottom:22}}>
         <span style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:13,color:C.textDim,display:"block",marginBottom:10}}>3 things you feel grateful for today</span>
         <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="write it here..." rows={4}
-          style={{width:"100%",background:"none",border:"none",borderBottom:`1px solid ${C.borderMid}`,padding:"8px 0",color:C.text,fontSize:16,fontFamily:"'Cormorant Garamond',serif",outline:"none",boxSizing:"border-box",caretColor:C.accent,resize:"none",lineHeight:1.75}}/>
+          style={{width:"100%",background:"none",border:"none",borderBottom:`1px solid ${C.borderMid}`,padding:"8px 0",color:C.text,fontSize:14,fontFamily:"'Outfit',sans-serif",outline:"none",boxSizing:"border-box",caretColor:C.accent,resize:"none",lineHeight:1.75}}/>
         <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
           <button onClick={add} style={btn}>save entry</button>
         </div>
       </div>
-      {currentMonthDays.length>0&&(
-        <div>
-          <span style={sec}>{fmtMonthYear(new Date(`${currentMonthKey}-01T00:00:00`))}</span>
-          {currentMonthDays.map((day) => (
-            <GratitudeDay
-              key={day}
-              dateKey={day}
-              entries={groupedEntries[day]}
-              open={openDay === day}
-              onToggle={() => toggleDay(day)}
-              onDelete={del}
-            />
-          ))}
-        </div>
-      )}
-      {archivedMonthKeys.length>0&&(
-        <div style={{marginTop:16}}>
-          <span style={sec}>archive by month</span>
-          {archivedMonthKeys.map((monthKey) => (
-            <GratitudeMonth
-              key={monthKey}
-              monthKey={monthKey}
-              days={daysByMonth[monthKey]}
-              groupedEntries={groupedEntries}
-              open={openMonth === monthKey}
-              openDay={openDay}
-              onToggleMonth={() => setOpenMonth((current) => current === monthKey ? null : monthKey)}
-              onToggleDay={toggleDay}
-              onDelete={del}
-            />
-          ))}
-        </div>
-      )}
+      {[currentMonthKey, ...archivedMonthKeys].filter(mk => (mk===currentMonthKey ? currentMonthDays : daysByMonth[mk])?.length).map(monthKey => (
+        <GratitudeMonth
+          key={monthKey}
+          monthKey={monthKey}
+          days={monthKey===currentMonthKey ? currentMonthDays : daysByMonth[monthKey]}
+          groupedEntries={groupedEntries}
+          open={openMonth === monthKey}
+          openDay={openDay}
+          onToggleMonth={() => setOpenMonth(cur => cur === monthKey ? null : monthKey)}
+          onToggleDay={toggleDay}
+          onDelete={del}
+        />
+      ))}
       {entries.length===0&&<p style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:14,color:C.textDim,textAlign:"center",marginTop:20}}>your gratitude entries will live here</p>}
     </div>
   );
@@ -964,7 +963,7 @@ function QuotesTab({quotes, setQuotes}) {
           onChange={(e) => setText(e.target.value)}
           placeholder="write the quote here..."
           rows={4}
-          style={{...inp, resize:"vertical", lineHeight:1.7, fontFamily:"'Cormorant Garamond',serif", fontSize:17, marginBottom:10}}
+          style={{...inp, resize:"vertical", lineHeight:1.7, fontSize:14, marginBottom:10}}
         />
         <input
           value={source}
@@ -986,7 +985,7 @@ function QuotesTab({quotes, setQuotes}) {
         <div key={quote.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 18px",marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
             <div style={{flex:1,minWidth:0}}>
-              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:C.text,lineHeight:1.55,margin:0,whiteSpace:"pre-wrap"}}>
+              <p style={{fontFamily:"'Outfit',sans-serif",fontSize:14,color:C.text,lineHeight:1.65,margin:0,whiteSpace:"pre-wrap"}}>
                 "{quote.text}"
               </p>
               <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginTop:10}}>
@@ -1295,7 +1294,7 @@ function ScheduleTab({ events, setEvents, wide = false }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
             <div>
               <span style={sec}>schedule</span>
-              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: wide ? 34 : 28, color: C.text, lineHeight: 1 }}>
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: wide ? 22 : 18, color: C.text, lineHeight: 1, fontWeight:500 }}>
                 {fmtMonthYear(viewDate)}
               </div>
               <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textDim, margin: "10px 0 0" }}>
@@ -1371,7 +1370,7 @@ function ScheduleTab({ events, setEvents, wide = false }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
               <div>
                 <span style={lbl}>selected day</span>
-                <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 24, color: C.text }}>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 16, color: C.text, fontWeight:500 }}>
                   {fmtWeekday(selectedDate)}
                 </div>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 12, color: C.textDim }}>
@@ -1446,7 +1445,7 @@ function ScheduleTab({ events, setEvents, wide = false }) {
                     </button>
                   </div>
                   {event.notes && (
-                    <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 15, color: C.textMid, lineHeight: 1.6, margin: "10px 0 0", whiteSpace: "pre-wrap" }}>
+                    <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, color: C.textMid, lineHeight: 1.6, margin: "10px 0 0", whiteSpace: "pre-wrap" }}>
                       {event.notes}
                     </p>
                   )}
@@ -1460,7 +1459,7 @@ function ScheduleTab({ events, setEvents, wide = false }) {
               <span style={lbl}>year view</span>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <button onClick={() => setViewDate(new Date(viewDate.getFullYear() - 1, viewDate.getMonth(), 1))} style={ghst}>-1y</button>
-                <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 26, color: C.text }}>{viewDate.getFullYear()}</div>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 18, color: C.text, fontWeight:500 }}>{viewDate.getFullYear()}</div>
                 <button onClick={() => setViewDate(new Date(viewDate.getFullYear() + 1, viewDate.getMonth(), 1))} style={ghst}>+1y</button>
               </div>
             </div>
@@ -1491,7 +1490,7 @@ function ScheduleTab({ events, setEvents, wide = false }) {
             <span style={lbl}>up next</span>
             <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
               {upcoming.length === 0 && (
-                <p style={{ fontFamily: "'Cormorant Garamond',serif", fontStyle: "italic", fontSize: 15, color: C.textDim, margin: 0 }}>
+                <p style={{ fontFamily: "'Outfit',sans-serif", fontStyle: "italic", fontSize: 13, color: C.textDim, margin: 0 }}>
                   your future calendar is open
                 </p>
               )}
@@ -1687,18 +1686,36 @@ function TabPanel({ active, children }) {
   );
 }
 
+function TabIcon({id,color}){
+  const s={stroke:color,strokeWidth:1.5,fill:"none",strokeLinecap:"round",strokeLinejoin:"round"};
+  const icons={
+    breathe: <><path d="M3 7q3-2 6 0q3 2 6 0" {...s}/><path d="M3 11q3-2 6 0q3 2 6 0" {...s}/></>,
+    today:   <><circle cx="9" cy="9" r="3.5" {...s}/><path d="M9 2v2M9 14v2M2 9h2M14 9h2" {...s}/></>,
+    focus:   <><circle cx="9" cy="9" r="6" {...s}/><circle cx="9" cy="9" r="2.5" {...s}/></>,
+    journal: <><path d="M3 5c2-1 4-1 6 0v9c-2-1-4-1-6 0z" {...s}/><path d="M15 5c-2-1-4-1-6 0v9c2-1 4-1 6 0z" {...s}/></>,
+    schedule:<><circle cx="9" cy="9" r="6" {...s}/><path d="M9 5.5V9l2.5 2.5" {...s}/></>,
+    notes:   <><path d="M4 3h7l3 3v9H4z" {...s}/><path d="M11 3v3h3" {...s}/><path d="M7 9h4M7 12h3" {...s}/></>,
+    grocery: <><path d="M5.5 7h7l-1.5 7.5h-4z" {...s}/><path d="M7 7C7 5.2 7.8 3.5 9 3.5S11 5.2 11 7" {...s}/></>,
+    readers: <><path d="M3 4.5C5 3.5 7 3.5 9 4.5v10C7 13.5 5 13.5 3 14.5z" {...s}/><path d="M15 4.5C13 3.5 11 3.5 9 4.5v10c2-1 4-1 6 0z" {...s}/></>,
+    goals:   <><path d="M9 2l1.8 5.2H17l-4.4 3.2 1.7 5.1L9 12.6l-5.3 2.9 1.7-5.1L1 7.2h6.2z" {...s}/></>,
+    quotes:  <><path d="M5 10V7.5C5 6 6 5 7.5 5" {...s}/><path d="M5 10h2.5" {...s}/><path d="M11 10V7.5C11 6 12 5 13.5 5" {...s}/><path d="M11 10h2.5" {...s}/></>,
+    cycle:   <><path d="M14.5 9a5.5 5.5 0 1 1-5.5-5.5" {...s}/><path d="M9 1.5v4l3-2" {...s}/></>,
+  };
+  return <svg width="18" height="18" viewBox="0 0 18 18">{icons[id]??<circle cx="9" cy="9" r="4" {...s}/>}</svg>;
+}
+
 const TABS = [
-  {id:"breathe", icon:"❄", label:"breathe" },
-  {id:"today",   icon:"◎", label:"today"   },
-  {id:"focus",   icon:"⊙", label:"focus"   },
-  {id:"journal", icon:"✦", label:"gratitude" },
-  {id:"schedule",icon:"☷", label:"schedule" },
-  {id:"notes",   icon:"✎", label:"notes"   },
-  {id:"grocery", icon:"◻", label:"grocery" },
-  {id:"readers", icon:"◈", label:"readers" },
-  {id:"goals",   icon:"△", label:"dreams"  },
-  {id:"quotes",  icon:"❝", label:"quotes"  },
-  {id:"cycle",   icon:"◑", label:"cycle"   },
+  {id:"breathe", label:"breathe" },
+  {id:"today",   label:"today"   },
+  {id:"focus",   label:"focus"   },
+  {id:"journal", label:"gratitude"},
+  {id:"schedule",label:"schedule" },
+  {id:"notes",   label:"notes"   },
+  {id:"grocery", label:"grocery" },
+  {id:"readers", label:"readers" },
+  {id:"goals",   label:"dreams"  },
+  {id:"quotes",  label:"quotes"  },
+  {id:"cycle",   label:"cycle"   },
 ];
 
 function LoginScreen({ onAuth }) {
@@ -1707,6 +1724,8 @@ function LoginScreen({ onAuth }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState('landing');
+  const [pendingAuth, setPendingAuth] = useState(null);
 
   const submit = async (e) => {
     if (e) e.preventDefault();
@@ -1717,14 +1736,71 @@ function LoginScreen({ onAuth }) {
     if (res.error) return setError(res.error);
     localStorage.setItem('token', res.token);
     localStorage.setItem('email', email);
-    onAuth(res.token, email);
+    if (mode === 'signup') {
+      setPendingAuth({ token: res.token, email });
+      setStep('gender');
+    } else {
+      onAuth(res.token, email);
+    }
+  };
+
+  const selectGender = (g) => {
+    localStorage.setItem('gender', g);
+    onAuth(pendingAuth.token, pendingAuth.email);
   };
 
   const inputStyle = { width:'100%', background:C.card, border:`1px solid ${C.borderMid}`, borderRadius:10, padding:'12px 14px', color:C.text, fontFamily:"'Outfit',sans-serif", fontSize:14, outline:'none', boxSizing:'border-box' };
 
+  if (step === 'landing') return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 24px' }}>
+      <div style={{ width:'100%', maxWidth:460 }}>
+        <div style={{ textAlign:'center', marginBottom:48 }}>
+          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:56, fontWeight:300, color:C.text, lineHeight:1, marginBottom:12 }}>Held</div>
+          <p style={{ fontFamily:"'Outfit',sans-serif", fontSize:14, color:C.textMid, letterSpacing:'0.08em', margin:0 }}>a quiet place to show up for yourself, daily.</p>
+        </div>
+        <div style={{ display:'grid', gap:12, marginBottom:48 }}>
+          {[
+            { icon:'◎', title:'daily anchors', desc:'morning and evening rituals to hold your rhythm' },
+            { icon:'⊙', title:'focus sessions',  desc:'timed deep work with 432 hz ambient music' },
+            { icon:'✦', title:'gratitude journal', desc:'daily entries archived by month, always yours' },
+            { icon:'◑', title:'cycle & wellness', desc:'track your rhythm and understand your body' },
+          ].map(({icon,title,desc}) => (
+            <div key={title} style={{ display:'flex', alignItems:'flex-start', gap:16, background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:'16px 18px' }}>
+              <span style={{ fontSize:16, color:C.accent, marginTop:2, flexShrink:0 }}>{icon}</span>
+              <div>
+                <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:13, fontWeight:500, color:C.text, marginBottom:3, letterSpacing:'0.02em' }}>{title}</div>
+                <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.textDim, lineHeight:1.5 }}>{desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <button onClick={() => { setMode('signup'); setStep('form'); }} style={{ ...btn, width:'100%', padding:'14px', fontSize:14 }}>create account</button>
+          <button onClick={() => { setMode('login'); setStep('form'); }} style={{ background:'none', border:`1px solid ${C.borderMid}`, borderRadius:10, padding:'14px', color:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:14, cursor:'pointer', width:'100%' }}>log in</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (step === 'gender') return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ width:'100%', maxWidth:430, background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, padding:'32px 28px', boxShadow:'0 28px 80px rgba(0,0,0,0.32)', textAlign:'center' }}>
+        <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:C.text, marginBottom:8 }}>Held</div>
+        <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.textDim, letterSpacing:'0.1em', marginBottom:32 }}>one more thing</div>
+        <p style={{ fontFamily:"'Outfit',sans-serif", fontSize:14, color:C.textMid, marginBottom:28, lineHeight:1.6 }}>how do you identify? this helps us tailor your experience.</p>
+        <div style={{ display:'flex', gap:12 }}>
+          {['female','male'].map(g => (
+            <button key={g} onClick={() => selectGender(g)} style={{ flex:1, padding:'14px', borderRadius:12, border:`1px solid ${C.borderMid}`, background:'none', color:C.text, fontFamily:"'Outfit',sans-serif", fontSize:14, cursor:'pointer', letterSpacing:'0.04em' }}>{g}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
       <div style={{ width:'100%', maxWidth:430, background:C.surface, border:`1px solid ${C.border}`, borderRadius:24, padding:'32px 28px', boxShadow:'0 28px 80px rgba(0,0,0,0.32)' }}>
+        <button onClick={() => setStep('landing')} style={{ background:'none', border:'none', color:C.textDim, fontFamily:"'Outfit',sans-serif", fontSize:12, cursor:'pointer', padding:0, marginBottom:20, display:'block' }}>← back</button>
         <div style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:36, fontWeight:300, color:C.text, textAlign:'center', marginBottom:8 }}>Held</div>
         <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.textDim, textAlign:'center', letterSpacing:'0.1em', marginBottom:40 }}>daily anchor app</div>
         <div style={{ display:'flex', gap:8, marginBottom:24 }}>
@@ -1758,6 +1834,7 @@ export default function App() {
   const isDesktop = viewportWidth >= 768;
   const isWideContent = viewportWidth >= 1280;
   const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [gender, setGender] = useState(() => localStorage.getItem('gender') || '');
   const [userEmail, setUserEmail] = useState(() => {
     const saved = localStorage.getItem('email');
     return saved && saved !== "undefined" ? saved : "";
@@ -1771,6 +1848,8 @@ export default function App() {
   const [focusTasks,setFocusTasks] = useState(DEFAULT_FOCUS);
   const [focusDone,setFocusDone]   = useState([]);
   const [isDark, setIsDark]         = useState(true);
+  const [music, setMusic]           = useState(false);
+  const audioRef                    = useRef(null);
   const [grocery,setGrocery]       = useState([]);
   const [books,setBooks]           = useState([]);
   const [savedAffirms,setSavedAffirms] = useState([]);
@@ -1869,13 +1948,44 @@ export default function App() {
 }, [anchors, anchorDone, focusTasks, focusDone, grocery, books, savedAffirms, journal, notes, goals, quotes, schedule, cycleData, loaded]);
 
   const cycleInfo = getCycleInfo(cycleData.lastPeriod,cycleData.cycleLength,cycleData.periodLength,cycleData.history);
+
+  const toggleMusic = () => {
+    if (music) {
+      setMusic(false);
+      if (audioRef.current) {
+        const a = audioRef.current;
+        const fade = () => { if(a.volume>0.01){a.volume=Math.max(0,a.volume-0.01);setTimeout(fade,50);}else a.pause(); };
+        fade();
+      }
+    } else {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('/Meditation.mp3');
+        audioRef.current.loop = true;
+      }
+      const a = audioRef.current;
+      a.volume = 0;
+      a.play().catch(()=>{});
+      setMusic(true);
+      const fade = () => { if(a.volume<0.35){a.volume=Math.min(0.35,a.volume+0.005);setTimeout(fade,80);} };
+      fade();
+    }
+  };
+
+  useEffect(()=>{
+    const pause = ()=>{ if(audioRef.current) audioRef.current.volume=0; };
+    const resume = ()=>{ if(audioRef.current && music) audioRef.current.volume=0.35; };
+    window.addEventListener('breathwork-start',pause);
+    window.addEventListener('breathwork-stop',resume);
+    return ()=>{ window.removeEventListener('breathwork-start',pause); window.removeEventListener('breathwork-stop',resume); };
+  },[music]);
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('email');
     setToken(null);
   };
 
-  if (!token) return <LoginScreen onAuth={(t, e) => { setToken(t); setUserEmail(e); }} />;
+  if (!token) return <LoginScreen onAuth={(t, e) => { setToken(t); setUserEmail(e); setGender(localStorage.getItem('gender') || ''); }} />;
   return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",justifyContent:"center",fontFamily:"'Outfit',sans-serif",padding:isDesktop ? "24px" : 0,overflowX:"hidden"}}>
       <div style={{width:"100%",maxWidth:isDesktop ? 1380 : "100%",display:isDesktop ? "grid" : "flex",flexDirection:isDesktop ? undefined : "column",gridTemplateColumns:isDesktop ? "260px minmax(0, 1fr)" : undefined,gap:isDesktop ? 24 : 0,minHeight:"100vh"}}>
@@ -1895,7 +2005,7 @@ export default function App() {
           </div>
 
           <div style={{background:C.surface,borderBottom:isDesktop ? "none" : `1px solid ${C.border}`,display:"flex",flexDirection:isDesktop ? "column" : "row",overflowX:isDesktop ? "visible" : "auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",padding:isDesktop ? 12 : 0}}>
-            {TABS.map(t=>{
+            {TABS.filter(t=>t.id!=='cycle'||gender!=='male').map(t=>{
               const active=tab===t.id;
               return (
                 <button key={t.id} onClick={()=>setTab(t.id)} style={{
@@ -1913,7 +2023,7 @@ export default function App() {
                   minWidth:isDesktop ? "100%" : 46,
                   textAlign:isDesktop ? "left" : "center"
                 }}>
-                  <span style={{fontSize:12,color:active?C.accent:C.textDim}}>{t.icon}</span>
+                  <TabIcon id={t.id} color={active?C.accent:C.textDim}/>
                   <span style={{fontFamily:"'Outfit',sans-serif",fontSize:isDesktop ? 11 : 9,letterSpacing:"0.07em",color:active?C.accent:C.textDim,textTransform:"uppercase",whiteSpace:"nowrap"}}>{t.label}</span>
                 </button>
               );
@@ -1924,6 +2034,7 @@ export default function App() {
             <div style={{marginTop:"auto",padding:"14px 20px 18px",borderTop:`1px solid ${C.border}`,background:C.surface}}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
                 <p style={{ fontFamily:"'Cormorant Garamond',serif", fontStyle:'italic', fontSize:12, color:C.textDim, margin:0, overflow:"hidden", textOverflow:"ellipsis", flex:1, minWidth:0 }}>{typeof userEmail === "string" ? userEmail : ""}</p>
+                <button onClick={toggleMusic} style={{ background:"none", border:`1px solid ${music?C.teal:C.borderMid}`, borderRadius:8, color:music?C.teal:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:13, cursor:"pointer", padding:"4px 8px", flexShrink:0 }}>♪</button>
                 <button onClick={() => setIsDark(d => !d)} style={{ background:"none", border:`1px solid ${C.borderMid}`, borderRadius:8, color:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:12, cursor:"pointer", padding:"4px 8px", flexShrink:0 }}>{isDark ? "☀" : "◑"}</button>
                 <button onClick={logout} style={{ background:'none', border:'none', color:C.textDim, fontFamily:"'Outfit',sans-serif", fontSize:11, cursor:'pointer', padding:0 }}>log out</button>
               </div>
@@ -1938,14 +2049,17 @@ export default function App() {
                 {TABS.find((item) => item.id === tab)?.label || "today"}
               </div>
               {!isDesktop && (
-                <button onClick={() => setIsDark(d => !d)} style={{ background:"none", border:`1px solid ${C.borderMid}`, borderRadius:8, color:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:14, cursor:"pointer", padding:"5px 10px", flexShrink:0 }}>{isDark ? "☀" : "◑"}</button>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={toggleMusic} style={{ background:"none", border:`1px solid ${music?C.teal:C.borderMid}`, borderRadius:8, color:music?C.teal:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:14, cursor:"pointer", padding:"5px 10px", flexShrink:0 }}>♪</button>
+                  <button onClick={() => setIsDark(d => !d)} style={{ background:"none", border:`1px solid ${C.borderMid}`, borderRadius:8, color:C.textMid, fontFamily:"'Outfit',sans-serif", fontSize:14, cursor:"pointer", padding:"5px 10px", flexShrink:0 }}>{isDark ? "☀" : "◑"}</button>
+                </div>
               )}
             </div>
 
             <div style={{flex:1,padding:isDesktop ? "28px 30px 34px" : "22px 18px 40px",overflowY:"auto"}}>
               <TabPanel active={tab==="today"}><TodayTab habits={anchors} doneIds={anchorDone} setDoneIds={setAnchorDone} setHabits={setAnchors}/></TabPanel>
               <TabPanel active={tab==="breathe"}><WimHofTab/></TabPanel>
-              <TabPanel active={tab==="focus"}><FocusTab tasks={focusTasks} doneIds={focusDone} setDoneIds={setFocusDone} setTasks={setFocusTasks}/></TabPanel>
+              <TabPanel active={tab==="focus"}><FocusTab tasks={focusTasks} doneIds={focusDone} setDoneIds={setFocusDone} setTasks={setFocusTasks} music={music}/></TabPanel>
               <TabPanel active={tab==="journal"}><JournalTab entries={journal} setEntries={setJournal}/></TabPanel>
               <TabPanel active={tab==="schedule"}><ScheduleTab events={schedule} setEvents={setSchedule} wide={isWideContent}/></TabPanel>
               <TabPanel active={tab==="notes"}><NotesTab notes={notes} setNotes={setNotes}/></TabPanel>
